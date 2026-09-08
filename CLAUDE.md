@@ -6,8 +6,9 @@ Privacy-first AI ID photo toolkit running entirely in the browser (ONNX Runtime 
 
 - 安装：`pnpm install`
 - 开发：`pnpm dev`（packages/web 落地后可用；当前占位）
-- 测试：`pnpm test`（T1.2 起为真实 vitest；当前占位）
-- Lint：`pnpm lint`（T1.2 起为真实 biome/eslint；当前占位）
+- 测试：`pnpm test`（vitest）
+- Lint：`pnpm lint`（biome，配置在 biome.json）
+- 规格库校验：`pnpm specs:check`（zod + 业务规则，CI 必过）
 
 ## 结构导览
 
@@ -25,5 +26,5 @@ Privacy-first AI ID photo toolkit running entirely in the browser (ONNX Runtime 
 - **core 纯函数纪律**：core 不 import 浏览器/Node API；图像数据用自描述结构（ImageData 兼容），保证 web/cli/测试三端复用。
 - **规格数据纪律**：`specs/*.json` 每条必含 `source.url` 与 `checkedAt`；考试规格每年报名季复查。UI 呈现时附「以报名系统最终要求为准」提示。
 - **隐私红线**：浏览器端不得发起任何携带图像数据的网络请求；模型经 Release Assets URL 拉取（仅下模型，不发数据）。
-- **CI 占位说明**：根 package.json 的 lint/test 为退出码 0 占位，T1.2 替换为真实命令——替换前不得在 CI 里加会失败的检查。
+- **CI 占位说明**：dev/build 仍为占位（T1.10 替换）；lint=biome、test=vitest、specs:check 已为真实命令。
 - 验证纪律：本地跑检查命令显式看退出码，禁止 tail 截断输出（工作区既有约定）。

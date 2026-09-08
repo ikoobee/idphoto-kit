@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "cet",
+    "name": { "zh": "全国大学英语四、六级考试报名照", "en": "CET-4/6 registration photo" },
+    "aliases": ["四六级", "cet4", "cet6", "英语四六级", "CET"],
+    "category": "exam",
+    "region": "CN",
+    "size": { "width": 144, "height": 192, "unit": "px", "dpi": null, "mm": null },
+    "background": { "allowed": ["#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 30 },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "全国大学英语四、六级考试报名系统（上传照片要求）",
+      "url": "https://cet-bm.neea.edu.cn/",
+      "checkedAt": "2026-09-07"
+    },
+    "notes": {
+      "zh": "白底近期正面免冠照，144×192px，JPEG，文件不大于 30KB；个别省份/年份要求以报名系统提示为准。",
+      "en": "Recent white-background portrait, 144×192 px, JPEG ≤30KB. Always defer to the registration portal's prompt."
+    }
+  }
+]

@@ -24,10 +24,11 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Placeholder scripts (exit 0) — replaced with real lint/test in T1.2.
-      # Keeping them explicit preserves the CI contract from day one.
-      - name: Lint
+      - name: Lint (biome)
         run: pnpm lint
 
-      - name: Test
+      - name: Spec library check (zod + business rules)
+        run: pnpm specs:check
+
+      - name: Test (vitest)
         run: pnpm test

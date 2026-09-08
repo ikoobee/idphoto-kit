@@ -1,0 +1,42 @@
+[
+  {
+    "slug": "visa-us",
+    "name": { "zh": "美国签证 / 护照照片", "en": "US visa / passport photo" },
+    "aliases": ["美签", "美国签证", "us visa", "DV lottery"],
+    "category": "visa",
+    "region": "US",
+    "size": { "width": 600, "height": 600, "unit": "px", "dpi": 300, "mm": "51×51" },
+    "background": { "allowed": ["#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 240 },
+    "face": { "headHeightRatio": [0.5, 0.69], "eyeLineRatio": 0.5625 },
+    "source": {
+      "name": "U.S. Department of State — Passport Photo Requirements",
+      "url": "https://travel.state.gov/content/travel/en/passports/how-apply/photos.html",
+      "checkedAt": "2026-09-07"
+    },
+    "notes": {
+      "zh": "2×2 英寸（51×51mm）正方形，头部（头顶至下巴）占照片高度的 50%–69%，眼睛位于底部往上 56%–69% 处；白底；JPEG ≤240KB。",
+      "en": "2×2 in square; head 50%–69% of image height; eye level 56%–69% from bottom; white background; JPEG ≤240KB."
+    }
+  },
+  {
+    "slug": "visa-jp",
+    "name": { "zh": "日本签证申请照片", "en": "Japan visa photo" },
+    "aliases": ["日签", "日本签证", "japan visa"],
+    "category": "visa",
+    "region": "JP",
+    "size": { "width": 531, "height": 531, "unit": "px", "dpi": 300, "mm": "45×45" },
+    "background": { "allowed": ["#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": null },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "日本国驻华大使馆（签证申请照片规格）",
+      "url": "https://www.cn.emb-japan.go.jp/",
+      "checkedAt": "2026-09-07"
+    },
+    "notes": {
+      "zh": "4.5×4.5cm 白底正面免冠；部分申请场合亦接受 4.5×3.5cm（35×45mm），以使领馆材料清单为准。",
+      "en": "45×45 mm white-background portrait; some applications also accept 45×35 mm. Defer to the embassy checklist."
+    }
+  }
+]

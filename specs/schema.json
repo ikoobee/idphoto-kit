@@ -1,0 +1,78 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://idphoto-kit.dev/schemas/spec-v1.json",
+  "title": "idphoto-kit photo spec",
+  "description": "Human-readable JSON Schema for spec entries. The authoritative validator is the zod schema in packages/specs-ts/src/schema.ts — keep both in sync.",
+  "type": "object",
+  "required": ["slug", "name", "category", "region", "size", "background", "file", "source"],
+  "additionalProperties": false,
+  "properties": {
+    "slug": { "type": "string", "pattern": "^[a-z0-9-]+$", "description": "Unique kebab-case ID" },
+    "name": {
+      "type": "object",
+      "required": ["zh", "en"],
+      "additionalProperties": false,
+      "properties": { "zh": { "type": "string", "minLength": 1 }, "en": { "type": "string", "minLength": 1 } }
+    },
+    "aliases": { "type": "array", "items": { "type": "string" } },
+    "category": { "enum": ["std", "exam", "cert", "visa", "job", "print"] },
+    "region": { "type": "string", "description": "ISO country code or 'GLOBAL'" },
+    "size": {
+      "type": "object",
+      "required": ["width", "height", "unit", "dpi"],
+      "additionalProperties": false,
+      "properties": {
+        "width": { "type": "integer", "minimum": 20, "maximum": 8192 },
+        "height": { "type": "integer", "minimum": 20, "maximum": 8192 },
+        "unit": { "const": "px" },
+        "dpi": { "type": ["integer", "null"] },
+        "mm": { "type": ["string", "null"], "description": "Display-only physical size, e.g. 25×35" }
+      }
+    },
+    "background": {
+      "type": "object",
+      "required": ["allowed"],
+      "additionalProperties": false,
+      "properties": {
+        "allowed": { "type": "array", "minItems": 1, "items": { "type": "string", "pattern": "^#[0-9A-Fa-f]{6}$" } },
+        "transparent": { "type": "boolean", "default": true }
+      }
+    },
+    "file": {
+      "type": "object",
+      "required": ["formats"],
+      "additionalProperties": false,
+      "properties": {
+        "formats": { "type": "array", "minItems": 1, "items": { "enum": ["jpg", "png"] } },
+        "maxKB": { "type": ["integer", "null"], "minimum": 1 }
+      }
+    },
+    "face": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "headHeightRatio": {
+          "type": ["array", "null"],
+          "items": { "type": "number", "minimum": 0, "maximum": 1 },
+          "minItems": 2, "maxItems": 2
+        },
+        "eyeLineRatio": { "type": ["number", "null"], "minimum": 0, "maximum": 1 }
+      }
+    },
+    "source": {
+      "type": "object",
+      "required": ["name", "url", "checkedAt"],
+      "additionalProperties": false,
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "url": { "type": "string", "format": "uri" },
+        "checkedAt": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$", "description": "Date of last manual verification (ISO 8601 date)" }
+      }
+    },
+    "notes": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": { "zh": { "type": "string" }, "en": { "type": "string" } }
+    }
+  }
+}

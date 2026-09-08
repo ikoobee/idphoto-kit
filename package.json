@@ -11,7 +11,14 @@
   "scripts": {
     "dev": "echo \"dev: pending packages/web (T1.10)\" && exit 0",
     "build": "echo \"build: pending packages/web (T1.10)\" && exit 0",
-    "lint": "echo \"lint: placeholder, real linter lands in T1.2\" && exit 0",
-    "test": "echo \"test: placeholder, real tests land in T1.2\" && exit 0"
+    "lint": "biome check .",
+    "test": "vitest run",
+    "specs:check": "pnpm --filter @idphoto-kit/specs check"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0",
+    "vitest": "^3.0.0"
   }
 }

@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "shebao",
+    "name": { "zh": "社会保障卡（二代证数字相片规格）", "en": "Social security card photo" },
+    "aliases": ["社保卡", "社保", "医保卡"],
+    "category": "cert",
+    "region": "CN",
+    "size": { "width": 358, "height": 441, "unit": "px", "dpi": 350, "mm": null },
+    "background": { "allowed": ["#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": null },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "人社部门社会保障卡数字相片采集要求（沿用二代居民身份证 358×441 数字相片规格）",
+      "url": "https://www.mohrss.gov.cn/",
+      "checkedAt": "2026-09-07"
+    },
+    "notes": {
+      "zh": "白底免冠彩色数字相片，358×441px（JPG/JPEG）；各地经办渠道细节可能不同，以当地社保经办机构要求为准。",
+      "en": "White-background portrait, 358×441 px (JPEG); local offices may vary."
+    }
+  }
+]
