@@ -1,0 +1,17 @@
+{
+  "name": "idphoto-kit",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Privacy-first AI ID photo toolkit that runs entirely in the browser",
+  "license": "MIT",
+  "packageManager": "pnpm@9.12.3",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "echo \"dev: pending packages/web (T1.10)\" && exit 0",
+    "build": "echo \"build: pending packages/web (T1.10)\" && exit 0",
+    "lint": "echo \"lint: placeholder, real linter lands in T1.2\" && exit 0",
+    "test": "echo \"test: placeholder, real tests land in T1.2\" && exit 0"
+  }
+}
