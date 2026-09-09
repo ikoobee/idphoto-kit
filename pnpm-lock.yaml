@@ -21,6 +21,8 @@ importers:
         specifier: ^3.0.0
         version: 3.2.7(@types/node@22.20.1)(tsx@4.23.13)
 
+  packages/core: {}
+
   packages/specs-ts:
     dependencies:
       zod:

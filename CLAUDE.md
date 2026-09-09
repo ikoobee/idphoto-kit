@@ -14,7 +14,7 @@ Privacy-first AI ID photo toolkit running entirely in the browser (ONNX Runtime 
 
 - `specs/` — 规格库 JSON + schema（单一事实源，TS/Python 双端共用；每条规格必须有 source 与 checkedAt）
 - `packages/specs-ts` — TS 读取器 + zod 校验器（T1.2）
-- `packages/core` — 处理管线纯函数（EXIF→人脸→抠图→换底→裁剪→导出；不依赖 DOM/IO）（T1.4+）
+- `packages/core` — 处理管线纯函数（已落地：RgbaImage/EXIF orientation/flip·rotate·transpose·crop/premultiplied 双线性缩放；后续：人脸裁剪对齐/换底合成/KB 压缩/排版）
 - `packages/web` — 浏览器应用（Preact + Vite）（T1.10+）
 - `packages/cli` — 命令行工具（T1.15）
 - `server/` — 可选自部署 API（Python FastAPI，M2；官方不运营）
