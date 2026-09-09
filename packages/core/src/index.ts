@@ -13,6 +13,8 @@ export {
   rotateAround,
 } from "./face.ts"
 export { crop, resizeBilinear } from "./geometry.ts"
+export type { LayoutResult, PrintLayoutOptions } from "./layout.ts"
+export { layoutPrintSheet } from "./layout.ts"
 export type { AlphaMat, EdgeRefineOptions, MattingModel } from "./matte.ts"
 export { refineAlpha } from "./matte.ts"
 export {
