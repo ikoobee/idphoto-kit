@@ -1,0 +1,21 @@
+{
+  "name": "@idphoto-kit/web",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Browser app: privacy-first ID photo maker (static site, all inference local)",
+  "license": "MIT",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@idphoto-kit/core": "workspace:*",
+    "@idphoto-kit/specs": "workspace:*",
+    "preact": "^10.24.0"
+  },
+  "devDependencies": {
+    "vite": "^6.0.0"
+  }
+}

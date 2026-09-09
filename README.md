@@ -36,9 +36,17 @@ Prerequisites: Node ≥ 20, pnpm ≥ 9.
 
 ```bash
 pnpm install
-pnpm dev      # run the web app locally (once packages/web lands)
-pnpm test     # placeholder until T1.2 — see CHANGELOG
+pnpm dev      # run the web app locally (Vite, http://localhost:5173)
+pnpm test     # vitest — core engine + spec library
+pnpm lint     # biome
+pnpm specs:check  # validate the spec library (zod + business rules)
 ```
+
+What works today: pick a spec from the built-in library (16 verified entries), drop in a photo
+(EXIF orientation corrected on the fly), get a center-cropped, exactly-sized JPEG with a live
+KB readout against the spec's size cap. Everything runs locally — no network calls carry image
+data. Face-anchored alignment (eye line / head-height ratio), background swap, and target-KB
+compression land in the upcoming milestones; see [CHANGELOG](CHANGELOG.md).
 
 ## Contributing
 

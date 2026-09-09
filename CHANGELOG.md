@@ -17,5 +17,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Real tooling: biome (lint/format) and vitest replace the placeholder scripts.
 - `@idphoto-kit/core` base layer (T1.4): self-describing `RgbaImage` type (ImageData-compatible, zero DOM deps), hand-rolled JPEG EXIF orientation reader, `applyOrientation` (8 orientations), flip/rotate/transpose/crop, and premultiplied-alpha bilinear resize (avoids hair-edge color bleed); 17 unit tests.
 - Face-anchored spec cropping (T1.5): `FaceLandmarks` adapter contract (eyes center / eye-line roll / head top / chin), `planCrop` geometry (counter-roll, head-height ratio midpoint scaling, eye-line placement, upscale & large-roll warnings) and `renderToSpec` inverse-mapped premultiplied sampler with edge-clamped background extension; 9 marker-based tests.
+- `@idphoto-kit/web` minimal app: `pnpm dev` now actually runs — Vite + Preact, spec cards from the live `/specs` library (via a new browser-safe `@idphoto-kit/specs/browser` entry), photo upload with EXIF orientation correction (core), center-crop placeholder to exact spec pixels, live KB readout vs. the spec cap. CI gains a build step.
 
 [Unreleased]: https://github.com/ikoobee/idphoto-kit/compare/v0.0.0...HEAD

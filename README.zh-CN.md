@@ -36,9 +36,13 @@
 
 ```bash
 pnpm install
-pnpm dev      # 本地运行 Web 应用（packages/web 落地后）
-pnpm test     # 占位命令，T1.2 起替换 — 见 CHANGELOG
+pnpm dev      # 本地运行 Web 应用（Vite，http://localhost:5173）
+pnpm test     # vitest — core 引擎 + 规格库测试
+pnpm lint     # biome
+pnpm specs:check  # 规格库校验（zod + 业务规则）
 ```
+
+当前可用能力：从内置规格库（16 条已核实条目）选规格 → 投入照片（EXIF 方向即时矫正）→ 得到精确尺寸的中心裁剪 JPEG，并实时显示文件体积是否达标。全部本地运行，任何网络请求都不携带图像数据。人脸锚定裁剪（眼线/头占比）、换底色、目标体积压缩将在后续里程碑落地，见 [CHANGELOG](CHANGELOG.md)。
 
 ## 参与贡献
 

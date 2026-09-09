@@ -5,7 +5,8 @@ Privacy-first AI ID photo toolkit running entirely in the browser (ONNX Runtime 
 ## 快速命令
 
 - 安装：`pnpm install`
-- 开发：`pnpm dev`（packages/web 落地后可用；当前占位）
+- 开发：`pnpm dev`（Vite，http://localhost:5173）
+- 构建：`pnpm build`（CI 必过）
 - 测试：`pnpm test`（vitest）
 - Lint：`pnpm lint`（biome，配置在 biome.json）
 - 规格库校验：`pnpm specs:check`（zod + 业务规则，CI 必过）
@@ -15,7 +16,7 @@ Privacy-first AI ID photo toolkit running entirely in the browser (ONNX Runtime 
 - `specs/` — 规格库 JSON + schema（单一事实源，TS/Python 双端共用；每条规格必须有 source 与 checkedAt）
 - `packages/specs-ts` — TS 读取器 + zod 校验器（T1.2）
 - `packages/core` — 处理管线纯函数（已落地：RgbaImage/EXIF orientation/flip·rotate·transpose·crop/premultiplied 双线性缩放；后续：人脸裁剪对齐/换底合成/KB 压缩/排版）
-- `packages/web` — 浏览器应用（Preact + Vite）（T1.10+）
+- `packages/web` — 浏览器应用（已落地最小版：规格卡片 + 上传 + EXIF 矫正 + 中心裁剪占位 + KB 实时读数；后续：人脸锚定/抠图换底/目标KB导出/双语）
 - `packages/cli` — 命令行工具（T1.15）
 - `server/` — 可选自部署 API（Python FastAPI，M2；官方不运营）
 - `docs/` — ADR 与录入指南

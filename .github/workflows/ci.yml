@@ -32,3 +32,6 @@ jobs:
 
       - name: Test (vitest)
         run: pnpm test
+
+      - name: Build web app (vite)
+        run: pnpm build

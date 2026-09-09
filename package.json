@@ -9,8 +9,9 @@
     "node": ">=20"
   },
   "scripts": {
-    "dev": "echo \"dev: pending packages/web (T1.10)\" && exit 0",
-    "build": "echo \"build: pending packages/web (T1.10)\" && exit 0",
+    "dev": "pnpm --filter @idphoto-kit/web dev",
+    "build": "pnpm --filter @idphoto-kit/web build",
+    "preview": "pnpm --filter @idphoto-kit/web preview",
     "lint": "biome check .",
     "test": "vitest run",
     "specs:check": "pnpm --filter @idphoto-kit/specs check"
