@@ -13,6 +13,7 @@
   "dependencies": {
     "@idphoto-kit/core": "workspace:*",
     "@idphoto-kit/specs": "workspace:*",
+    "onnxruntime-web": "^1.20.0",
     "preact": "^10.24.0"
   },
   "devDependencies": {

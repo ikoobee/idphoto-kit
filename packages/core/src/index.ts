@@ -9,6 +9,8 @@ export {
   rotateAround,
 } from "./face.ts"
 export { crop, resizeBilinear } from "./geometry.ts"
+export type { AlphaMat, EdgeRefineOptions, MattingModel } from "./matte.ts"
+export { refineAlpha } from "./matte.ts"
 export {
   applyOrientation,
   flipH,
