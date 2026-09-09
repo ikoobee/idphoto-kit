@@ -4,6 +4,8 @@ export type { BackgroundOption } from "./compose.ts"
 export { composeBackground, parseHexColor } from "./compose.ts"
 export type { Orientation } from "./exif.ts"
 export { readJpegOrientation } from "./exif.ts"
+export type { FitOptions, JpegEncoder, TargetFitResult } from "./export.ts"
+export { fitJpegToTargetKB } from "./export.ts"
 export type { CropTarget, FaceLandmarks, Point } from "./face.ts"
 export {
   DEFAULT_EYE_LINE_RATIO,
