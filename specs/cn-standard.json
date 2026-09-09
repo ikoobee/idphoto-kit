@@ -12,7 +12,7 @@
     "source": {
       "name": "Common photo studio standard, 25×35 mm @300 dpi (industry convention, not a mandatory national standard)",
       "url": "https://github.com/ikoobee/idphoto-kit",
-      "checkedAt": "2026-09-07"
+      "checkedAt": "2026-09-09"
     },
     "notes": {
       "zh": "像素值由 25×35mm @300dpi 换算并取整；底色按用途选择（考试多白/蓝底，社保白底，红底常见于保险/婚庆）。",
@@ -32,7 +32,7 @@
     "source": {
       "name": "Common photo studio standard, 22×32 mm @300 dpi (industry convention)",
       "url": "https://github.com/ikoobee/idphoto-kit",
-      "checkedAt": "2026-09-07"
+      "checkedAt": "2026-09-09"
     },
     "notes": {
       "zh": "常见于驾驶证、医保卡等场景；像素值由毫米换算取整。",
@@ -52,7 +52,7 @@
     "source": {
       "name": "Common photo studio standard, 35×49 mm @300 dpi (industry convention)",
       "url": "https://github.com/ikoobee/idphoto-kit",
-      "checkedAt": "2026-09-07"
+      "checkedAt": "2026-09-09"
     },
     "notes": {
       "zh": "常用于护照申请、学位证书等。",
@@ -72,7 +72,7 @@
     "source": {
       "name": "Common photo studio standard, 33×48 mm @300 dpi (industry convention)",
       "url": "https://github.com/ikoobee/idphoto-kit",
-      "checkedAt": "2026-09-07"
+      "checkedAt": "2026-09-09"
     },
     "notes": {
       "zh": "常见于护照（部分场合）与求职简历。",

@@ -6,8 +6,8 @@ import { SpecSchema } from "../src/schema.ts"
 describe("specs library", () => {
   const raw = loadRawSpecs()
 
-  it("loads seed data from /specs", () => {
-    expect(raw.length).toBeGreaterThanOrEqual(8)
+  it("loads the T1.3 batch of specs", () => {
+    expect(raw.length).toBeGreaterThanOrEqual(16)
   })
 
   it("every entry passes zod schema and business rules", () => {

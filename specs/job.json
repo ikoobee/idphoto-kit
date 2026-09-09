@@ -1,0 +1,22 @@
+[
+  {
+    "slug": "resume",
+    "name": { "zh": "求职简历照", "en": "Resume photo" },
+    "aliases": ["简历", "求职", "工作照"],
+    "category": "job",
+    "region": "CN",
+    "size": { "width": 390, "height": 567, "unit": "px", "dpi": 300, "mm": "33×48" },
+    "background": { "allowed": ["#FFFFFF", "#438EDB"], "transparent": true },
+    "file": { "formats": ["jpg", "png"], "maxKB": null },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "Resume photo is not a regulated format — small 2-inch (33×48 mm) is the common convention",
+      "url": "https://github.com/ikoobee/idphoto-kit",
+      "checkedAt": "2026-09-09"
+    },
+    "notes": {
+      "zh": "简历无官方规格；小二寸（33×48mm）白底为通用惯例，蓝底亦常见；透明底 PNG 便于嵌入设计模板。",
+      "en": "No official standard; small 2-inch white background is the convention, blue also common; transparent PNG fits resume templates."
+    }
+  }
+]

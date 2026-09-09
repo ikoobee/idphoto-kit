@@ -12,11 +12,137 @@
     "source": {
       "name": "全国大学英语四、六级考试报名系统（上传照片要求）",
       "url": "https://cet-bm.neea.edu.cn/",
-      "checkedAt": "2026-09-07"
+      "checkedAt": "2026-09-09"
     },
     "notes": {
       "zh": "白底近期正面免冠照，144×192px，JPEG，文件不大于 30KB；个别省份/年份要求以报名系统提示为准。",
       "en": "Recent white-background portrait, 144×192 px, JPEG ≤30KB. Always defer to the registration portal's prompt."
+    }
+  },
+  {
+    "slug": "kaoyan",
+    "name": {
+      "zh": "全国硕士研究生招生考试报名照（网上确认）",
+      "en": "Postgraduate entrance exam photo"
+    },
+    "aliases": ["考研", "研究生", "研招", "kaoyan"],
+    "category": "exam",
+    "region": "CN",
+    "size": { "width": 480, "height": 640, "unit": "px", "dpi": null, "mm": null },
+    "background": { "allowed": ["#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 200 },
+    "face": { "headHeightRatio": [0.6, 0.72], "eyeLineRatio": null },
+    "source": {
+      "name": "中国研究生招生信息网（网上确认电子照片要求）",
+      "url": "https://yz.chsi.com.cn/",
+      "checkedAt": "2026-09-09"
+    },
+    "notes": {
+      "zh": "近 6 个月白底正面免冠彩色照，480×640px，JPG，约 20–200KB，头部约占画面 2/3；部分报考点接受蓝底，以报考点网上确认公告为准。",
+      "en": "Recent white-background portrait, 480×640 px, JPG, ~20–200KB, head ≈2/3 of frame. Some acceptance points allow blue; defer to the local announcement."
+    }
+  },
+  {
+    "slug": "ntce",
+    "name": { "zh": "中小学教师资格考试报名照", "en": "Teacher certification (NTCE) photo" },
+    "aliases": ["教资", "教师资格", "教师资格证", "ntce"],
+    "category": "exam",
+    "region": "CN",
+    "size": { "width": 300, "height": 400, "unit": "px", "dpi": null, "mm": null },
+    "background": { "allowed": ["#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 200 },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "中小学教师资格考试（NTCE）报名公告（照片上传要求）",
+      "url": "https://ntce.neea.edu.cn/",
+      "checkedAt": "2026-09-09"
+    },
+    "notes": {
+      "zh": "近 6 个月白底正面免冠照，显示头部和肩上部；JPG/JPEG 不大于 200K，压缩品质系数不低于 60；宽高比约 3:4 且宽≤400px、高≤600px（300×400 为稳妥取值）；各省公告为准。",
+      "en": "Recent white-background head-and-shoulders portrait; JPG ≤200KB, quality ≥60; aspect ≈3:4 within 400×600 cap (300×400 chosen); defer to provincial notices."
+    }
+  },
+  {
+    "slug": "gongwuyuan",
+    "name": { "zh": "国家公务员考试报名照（报名确认）", "en": "Civil service exam photo" },
+    "aliases": ["国考", "公务员", "公务员考试", "gwy"],
+    "category": "exam",
+    "region": "CN",
+    "size": { "width": 295, "height": 413, "unit": "px", "dpi": 300, "mm": null },
+    "background": { "allowed": ["#438EDB", "#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 100 },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "中央机关及其直属机构考试录用公务员专题网站（报名确认照片要求）",
+      "url": "http://bm.scs.gov.cn/",
+      "checkedAt": "2026-09-09"
+    },
+    "notes": {
+      "zh": "近期免冠正面电子证件照，宽不低于 295px、高不低于 413px，JPG 约 20–100KB；蓝底或白底；须用官方「照片处理工具」处理后再上传，禁止低像素照片放大使用。",
+      "en": "Recent portrait, width ≥295 px / height ≥413 px, JPG ~20–100KB; blue or white background; must pass the official Photo Processor tool; never upscale a low-res photo."
+    }
+  },
+  {
+    "slug": "ncre",
+    "name": { "zh": "全国计算机等级考试报名照", "en": "NCRE registration photo" },
+    "aliases": ["计算机等级", "计算机二级", "NCRE", "计二级"],
+    "category": "exam",
+    "region": "CN",
+    "size": { "width": 295, "height": 413, "unit": "px", "dpi": 300, "mm": null },
+    "background": { "allowed": ["#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 200 },
+    "face": { "headHeightRatio": [0.6, 0.75], "eyeLineRatio": null },
+    "source": {
+      "name": "全国计算机等级考试报名系统（NCRE 照片要求）",
+      "url": "https://ncre-bm.neea.edu.cn/",
+      "checkedAt": "2026-09-09"
+    },
+    "notes": {
+      "zh": "白底（部分省可浅蓝）正面免冠照；最低 144×192px 但通过率低，推荐 295×413px；JPEG 约 20–200KB，24 位真彩；头顶留空约 1/10、头部约占 7/10；以当次报名系统提示为准。",
+      "en": "White background (light blue in some provinces); 144×192 minimum but 295×413 recommended; JPEG ~20–200KB 24-bit; head ≈7/10 with 1/10 top margin."
+    }
+  },
+  {
+    "slug": "falv",
+    "name": {
+      "zh": "国家统一法律职业资格考试报名照",
+      "en": "National legal professional exam photo"
+    },
+    "aliases": ["法考", "司法考试", "司考", "法律职业资格"],
+    "category": "exam",
+    "region": "CN",
+    "size": { "width": 413, "height": 626, "unit": "px", "dpi": null, "mm": null },
+    "background": { "allowed": ["#D9001B", "#438EDB", "#FFFFFF"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 100 },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "司法部国家统一法律职业资格考试公告（电子证件照片格式）",
+      "url": "https://www.moj.gov.cn/pub/sfbgw/zwxxgk/fdzdgknr/fdzdgknrtzwj/202506/t20250605_520493.html",
+      "checkedAt": "2026-09-09"
+    },
+    "notes": {
+      "zh": "近 3 个月彩色正面免冠照，413×626px，JPG，40KB–100KB（注意有 40KB 下限，体积过小同样不合格）；红/蓝/白底均可；露双肩双耳双眉。",
+      "en": "Recent (<3 months) portrait, 413×626 px, JPG, 40KB–100KB (note the 40KB lower bound); red/blue/white all acceptable; shoulders, ears and eyebrows visible."
+    }
+  },
+  {
+    "slug": "puhua",
+    "name": { "zh": "普通话水平测试报名照", "en": "Putonghua proficiency test photo" },
+    "aliases": ["普通话", "普通话考试", "putonghua"],
+    "category": "exam",
+    "region": "CN",
+    "size": { "width": 390, "height": 567, "unit": "px", "dpi": 300, "mm": "33×48" },
+    "background": { "allowed": ["#438EDB", "#FFFFFF", "#D9001B"], "transparent": false },
+    "file": { "formats": ["jpg"], "maxKB": 80 },
+    "face": { "headHeightRatio": null, "eyeLineRatio": null },
+    "source": {
+      "name": "国家普通话水平测试在线报名系统（照片要求）",
+      "url": "https://bm.cltt.org/",
+      "checkedAt": "2026-09-09"
+    },
+    "notes": {
+      "zh": "近 6 个月正面免冠照，390×567px（大一寸），JPG 约 30–80KB；蓝底为主，部分测试站接受白/红底；以当地测试站要求为准。",
+      "en": "Recent portrait, 390×567 px, JPG ~30–80KB; blue background preferred, white/red accepted by some stations; defer to local requirements."
     }
   }
 ]
