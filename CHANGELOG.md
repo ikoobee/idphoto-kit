@@ -16,5 +16,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@idphoto-kit/specs` package: zod schema, loader, business-rule checks (unique slugs, fresh `checkedAt`, `maxKB`⇒jpg, sane head-height ratios), `specs:check` CI gate, 11 vitest cases.
 - Real tooling: biome (lint/format) and vitest replace the placeholder scripts.
 - `@idphoto-kit/core` base layer (T1.4): self-describing `RgbaImage` type (ImageData-compatible, zero DOM deps), hand-rolled JPEG EXIF orientation reader, `applyOrientation` (8 orientations), flip/rotate/transpose/crop, and premultiplied-alpha bilinear resize (avoids hair-edge color bleed); 17 unit tests.
+- Face-anchored spec cropping (T1.5): `FaceLandmarks` adapter contract (eyes center / eye-line roll / head top / chin), `planCrop` geometry (counter-roll, head-height ratio midpoint scaling, eye-line placement, upscale & large-roll warnings) and `renderToSpec` inverse-mapped premultiplied sampler with edge-clamped background extension; 9 marker-based tests.
 
 [Unreleased]: https://github.com/ikoobee/idphoto-kit/compare/v0.0.0...HEAD
