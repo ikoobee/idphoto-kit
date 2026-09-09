@@ -1,4 +1,4 @@
-export type { CropPlan, CropWarning, CropWarningCode } from "./align.ts"
+export type { CropAdjust, CropPlan, CropWarning, CropWarningCode } from "./align.ts"
 export { planCrop, renderToSpec } from "./align.ts"
 export type { BackgroundOption } from "./compose.ts"
 export { composeBackground, parseHexColor } from "./compose.ts"

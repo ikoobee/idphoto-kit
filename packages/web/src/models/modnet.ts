@@ -1,14 +1,15 @@
 import { type AlphaMat, type MattingModel, type RgbaImage, refineAlpha } from "@idphoto-kit/core"
+import { cachedModelBytes } from "./model-cache.ts"
 import { alphaFromModnetOutput, buildModnetInput, MODNET_INPUT_SIZE } from "./modnet-tensor.ts"
 
 /**
- * MODNet portrait matting via ONNX Runtime Web. The model file (~int8) is
- * fetched lazily from the Release Assets URL — no image data ever leaves the
- * browser; the fetch carries only the model download.
+ * MODNet portrait matting via ONNX Runtime Web. Model bytes are fetched from
+ * the Release Assets URL once and cached in IndexedDB — no image data ever
+ * leaves the browser; the fetch carries only the model download.
  *
  * NOTE: the URL below is the planned models-v0 release asset. Until the model
- * is uploaded this adapter cannot run; wiring the UI to it happens in the
- * processing-page milestone regardless.
+ * is uploaded this adapter cannot run; the UI surfaces that state instead of
+ * failing silently.
  */
 export const DEFAULT_MODNET_URL =
   "https://github.com/ikoobee/idphoto-kit/releases/download/models-v0/modnet-ppm-512-int8.onnx"
@@ -25,7 +26,8 @@ export class ModnetOnnx implements MattingModel {
   private async load(): Promise<InferenceSessionLike> {
     this.session ??= (async () => {
       const ort = await import("onnxruntime-web")
-      return ort.InferenceSession.create(this.opts.url ?? DEFAULT_MODNET_URL)
+      const bytes = await cachedModelBytes(this.opts.url ?? DEFAULT_MODNET_URL)
+      return ort.InferenceSession.create(bytes)
     })()
     return this.session
   }

@@ -1,23 +1,75 @@
-import { crop, type RgbaImage, readJpegOrientation, resizeBilinear } from "@idphoto-kit/core"
+import {
+  type CropAdjust,
+  type CropPlan,
+  type CropTarget,
+  crop,
+  type FaceLandmarks,
+  planCrop,
+  type RgbaImage,
+  readJpegOrientation,
+  renderToSpec,
+  resizeBilinear,
+} from "@idphoto-kit/core"
 import type { Spec } from "@idphoto-kit/specs/browser"
 import { useMemo, useRef, useState } from "preact/hooks"
 import { loadSpecs } from "./data.ts"
+import { MediaPipeFace } from "./models/face.ts"
 
-interface Result {
-  url: string
-  kb: number
-  width: number
-  height: number
-  orientation: number | null
+const NO_ADJUST: CropAdjust = { dx: 0, dy: 0, scale: 1, rotateDeg: 0 }
+
+interface Processed {
+  source: RgbaImage
+  face: FaceLandmarks | null
+  target: CropTarget
+  adjust: CropAdjust
+  kb: number | null
+  exifOrientation: number | null
 }
 
 export function App() {
   const specs = useMemo(() => loadSpecs(), [])
   const [selected, setSelected] = useState<Spec | null>(null)
   const [busy, setBusy] = useState(false)
-  const [result, setResult] = useState<Result | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [proc, setProc] = useState<Processed | null>(null)
   const canvasRef = useRef<HTMLCanvasElement>(null)
+  const faceModel = useMemo(() => new MediaPipeFace(), [])
+
+  function paint(out: RgbaImage) {
+    const canvas = canvasRef.current
+    if (!canvas) throw new Error("canvas missing")
+    canvas.width = out.width
+    canvas.height = out.height
+    const ctx = canvas.getContext("2d")
+    if (!ctx) throw new Error("2D canvas unavailable")
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(out.data), out.width, out.height), 0, 0)
+  }
+
+  async function measureKb(out: RgbaImage): Promise<number> {
+    const canvas = document.createElement("canvas")
+    canvas.width = out.width
+    canvas.height = out.height
+    const ctx = canvas.getContext("2d")
+    if (!ctx) throw new Error("2D canvas unavailable")
+    ctx.putImageData(new ImageData(new Uint8ClampedArray(out.data), out.width, out.height), 0, 0)
+    return new Promise((resolve, reject) =>
+      canvas.toBlob(
+        (b) => (b ? resolve(Math.round(b.size / 1024)) : reject(new Error("encode failed"))),
+        "image/jpeg",
+        0.92,
+      ),
+    )
+  }
+
+  /** Re-render the spec output for the current source + adjust and repaint. */
+  async function rerender(state: Processed): Promise<Processed> {
+    const out = state.face
+      ? renderToSpec(state.source, state.face, state.target, state.adjust)
+      : fitCenter(state.source, state.target.width, state.target.height)
+    paint(out)
+    const kb = await measureKb(out)
+    return { ...state, kb }
+  }
 
   async function onFile(file: File) {
     if (!selected) return
@@ -26,36 +78,48 @@ export function App() {
     try {
       const bytes = new Uint8Array(await file.arrayBuffer())
       const orientation = readJpegOrientation(bytes)
-      // "from-image" makes the browser apply EXIF orientation while decoding
       const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" })
-      const rgba = bitmapToRgba(bitmap)
+      const source = bitmapToRgba(bitmap)
       bitmap.close()
 
-      const { width, height } = selected.size
-      const out = fitCenter(rgba, width, height)
+      let face: FaceLandmarks | null = null
+      try {
+        face = await faceModel.detect(source)
+      } catch (e) {
+        console.warn("face detection unavailable, falling back to center crop", e)
+      }
 
-      const canvas = canvasRef.current
-      if (!canvas) throw new Error("canvas missing")
-      canvas.width = out.width
-      canvas.height = out.height
-      const ctx = canvas.getContext("2d")
-      if (!ctx) throw new Error("2D canvas unavailable")
-      ctx.putImageData(new ImageData(new Uint8ClampedArray(out.data), out.width, out.height), 0, 0)
-      const blob = await canvasToJpeg(canvas, 0.92)
-      if (result) URL.revokeObjectURL(result.url)
-      setResult({
-        url: URL.createObjectURL(blob),
-        kb: Math.round(blob.size / 1024),
-        width,
-        height,
-        orientation,
-      })
+      const target: CropTarget = {
+        width: selected.size.width,
+        height: selected.size.height,
+        face: selected.face,
+      }
+      let state: Processed = {
+        source,
+        face,
+        target,
+        adjust: { ...NO_ADJUST },
+        kb: null,
+        exifOrientation: orientation,
+      }
+      state = await rerender(state)
+      setProc(state)
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
       setBusy(false)
     }
   }
+
+  async function onAdjust(patch: Partial<CropAdjust>) {
+    if (!proc) return
+    const next = { ...proc.adjust, ...patch }
+    setProc({ ...proc, adjust: next }) // instant visual update
+    const updated = await rerender({ ...proc, adjust: next })
+    setProc(updated)
+  }
+
+  const plan: CropPlan | null = proc?.face ? planCrop(proc.face, proc.target) : null
 
   return (
     <main>
@@ -66,24 +130,137 @@ export function App() {
         <p>Privacy-first ID photos — everything stays in your browser.</p>
       </header>
 
-      {!selected ? (
-        <section class="grid">
-          {specs.map((s) => (
-            <button type="button" class="card" key={s.slug} onClick={() => setSelected(s)}>
-              <b>{s.name.en}</b>
-              <span class="dim">
-                {s.name.zh} · {s.size.width}×{s.size.height}px
-                {s.file.maxKB ? ` · ≤${s.file.maxKB}KB` : ""}
-              </span>
-              <span class="dots">
-                {s.background.allowed.map((c) => (
-                  <i key={c} style={`background:${c}`} />
-                ))}
-              </span>
-            </button>
-          ))}
-        </section>
+      {!selected || !proc ? (
+        <SpecsPage
+          specs={specs}
+          selected={selected}
+          onSelect={(s) => {
+            setSelected(s)
+            setProc(null)
+          }}
+        />
       ) : (
+        <section class="work">
+          <div class="bar">
+            <button
+              type="button"
+              class="ghost"
+              onClick={() => {
+                setSelected(null)
+                setProc(null)
+              }}
+            >
+              ← all specs
+            </button>
+            <span class="dim">
+              {selected.name.en} · {selected.size.width}×{selected.size.height}px
+              {selected.file.maxKB ? ` · ≤${selected.file.maxKB}KB` : ""}
+            </span>
+          </div>
+
+          <div class="split">
+            <div class="stage">
+              <canvas ref={canvasRef} />
+              {busy && <p class="dim">Processing…</p>}
+              {error && <p class="err">{error}</p>}
+              <label class="drop small-pad">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  disabled={busy}
+                  onChange={(e) => {
+                    const f = e.currentTarget.files?.[0]
+                    if (f) onFile(f)
+                  }}
+                />
+                {busy ? "Processing…" : "📁 Change photo (never uploaded anywhere)"}
+              </label>
+            </div>
+
+            <aside class="panel">
+              <h3>Fine-tune</h3>
+              <Slider
+                label="Zoom"
+                min={0.8}
+                max={1.4}
+                step={0.01}
+                value={proc.adjust.scale ?? 1}
+                onInput={(v) => onAdjust({ scale: v })}
+              />
+              <Slider
+                label="Horizontal"
+                min={-60}
+                max={60}
+                step={1}
+                value={proc.adjust.dx ?? 0}
+                onInput={(v) => onAdjust({ dx: v })}
+              />
+              <Slider
+                label="Vertical"
+                min={-60}
+                max={60}
+                step={1}
+                value={proc.adjust.dy ?? 0}
+                onInput={(v) => onAdjust({ dy: v })}
+              />
+              <Slider
+                label="Rotate°"
+                min={-10}
+                max={10}
+                step={0.5}
+                value={proc.adjust.rotateDeg ?? 0}
+                onInput={(v) => onAdjust({ rotateDeg: v })}
+              />
+
+              <h3>Background</h3>
+              <div class="dots big">
+                {selected.background.allowed.map((c) => (
+                  <i key={c} style={`background:${c}`} title={c} />
+                ))}
+              </div>
+              <p class="dim small">
+                Background swap ships with the matting model asset (Release models-v0, pending
+                upload). The face-anchored crop above is fully functional.
+              </p>
+
+              <h3>Checklist</h3>
+              <ul class="checks">
+                <Check ok label={`Size ${selected.size.width}×${selected.size.height}px`} />
+                <Check
+                  ok={proc.face !== null}
+                  label={
+                    proc.face
+                      ? "Face-anchored (eye line / head ratio)"
+                      : "Face not found — center crop fallback"
+                  }
+                />
+                {plan?.warnings.map((w) => (
+                  <Check key={w.code} ok={false} label={w.message} />
+                ))}
+                {proc.exifOrientation && proc.exifOrientation > 1 ? (
+                  <Check ok label={`EXIF orientation ${proc.exifOrientation} corrected`} />
+                ) : null}
+                {selected.file.maxKB ? (
+                  proc.kb !== null ? (
+                    <Check
+                      ok={proc.kb <= selected.file.maxKB}
+                      label={`File size ${proc.kb}KB / ≤${selected.file.maxKB}KB${
+                        proc.kb > selected.file.maxKB
+                          ? " — target-KB export compresses this on download"
+                          : ""
+                      }`}
+                    />
+                  ) : (
+                    <Check ok label="Measuring file size…" />
+                  )
+                ) : null}
+              </ul>
+            </aside>
+          </div>
+        </section>
+      )}
+
+      {selected && !proc && !busy && (
         <section class="work">
           <div class="bar">
             <button type="button" class="ghost" onClick={() => setSelected(null)}>
@@ -91,7 +268,6 @@ export function App() {
             </button>
             <span class="dim">
               {selected.name.en} · {selected.size.width}×{selected.size.height}px
-              {selected.file.maxKB ? ` · ≤${selected.file.maxKB}KB` : ""}
             </span>
           </div>
           <label class="drop">
@@ -107,28 +283,68 @@ export function App() {
             {busy ? "Processing…" : "📁 Choose a photo (never uploaded anywhere)"}
           </label>
           {error && <p class="err">{error}</p>}
-          <canvas ref={canvasRef} class={result ? "" : "hidden"} />
-          {result && (
-            <p class="meta">
-              {result.width}×{result.height}px · {result.kb} KB
-              {selected.file.maxKB
-                ? result.kb <= selected.file.maxKB
-                  ? " ✓ within limit"
-                  : ` ⚠ over ${selected.file.maxKB}KB — target-size compression lands next`
-                : ""}
-              {result.orientation && result.orientation > 1
-                ? ` · EXIF orientation ${result.orientation} corrected`
-                : ""}
-            </p>
-          )}
-          <p class="dim small">
-            Placeholder center-crop for now — face-anchored alignment (eye line, head-height ratio)
-            activates with the on-device face model. Background swap and target-KB export are next
-            in the pipeline.
-          </p>
+          <p class="dim small">Face-anchored alignment runs on-device via MediaPipe.</p>
         </section>
       )}
     </main>
+  )
+}
+
+function SpecsPage(props: { specs: Spec[]; selected: Spec | null; onSelect: (s: Spec) => void }) {
+  return (
+    <section class="grid">
+      {props.specs.map((s) => (
+        <button
+          type="button"
+          class={`card${props.selected?.slug === s.slug ? " sel" : ""}`}
+          key={s.slug}
+          onClick={() => props.onSelect(s)}
+        >
+          <b>{s.name.en}</b>
+          <span class="dim">
+            {s.name.zh} · {s.size.width}×{s.size.height}px
+            {s.file.maxKB ? ` · ≤${s.file.maxKB}KB` : ""}
+          </span>
+          <span class="dots">
+            {s.background.allowed.map((c) => (
+              <i key={c} style={`background:${c}`} />
+            ))}
+          </span>
+        </button>
+      ))}
+    </section>
+  )
+}
+
+function Slider(props: {
+  label: string
+  min: number
+  max: number
+  step: number
+  value: number
+  onInput: (v: number) => void
+}) {
+  return (
+    <label class="slider">
+      <span>{props.label}</span>
+      <input
+        type="range"
+        min={props.min}
+        max={props.max}
+        step={props.step}
+        value={props.value}
+        onInput={(e) => props.onInput(+e.currentTarget.value)}
+      />
+    </label>
+  )
+}
+
+function Check(props: { ok: boolean; label: string }) {
+  return (
+    <li class={props.ok ? "ok" : "warn"}>
+      <span>{props.ok ? "✓" : "!"}</span>
+      {props.label}
+    </li>
   )
 }
 
@@ -143,7 +359,7 @@ function bitmapToRgba(bmp: ImageBitmap): RgbaImage {
   return { data: id.data, width: id.width, height: id.height }
 }
 
-/** Center crop to target aspect (cover, slight upward bias for faces), exact px resize. */
+/** Center crop to target aspect (cover, slight upward bias), exact px resize. */
 function fitCenter(img: RgbaImage, width: number, height: number): RgbaImage {
   const targetAspect = width / height
   const srcAspect = img.width / img.height
@@ -157,14 +373,4 @@ function fitCenter(img: RgbaImage, width: number, height: number): RgbaImage {
   return cropped.width === width && cropped.height === height
     ? cropped
     : resizeBilinear(cropped, width, height)
-}
-
-function canvasToJpeg(canvas: HTMLCanvasElement, quality: number): Promise<Blob> {
-  return new Promise((resolve, reject) =>
-    canvas.toBlob(
-      (b) => (b ? resolve(b) : reject(new Error("encode failed"))),
-      "image/jpeg",
-      quality,
-    ),
-  )
 }

@@ -78,30 +78,50 @@ export function planCrop(face: FaceLandmarks, target: CropTarget): CropPlan {
   }
 }
 
+/** User fine-tuning layered on top of the planned crop (all optional). */
+export interface CropAdjust {
+  /** Shift the anchor right, pixels on the spec canvas. */
+  dx?: number
+  /** Shift the anchor down, pixels on the spec canvas. */
+  dy?: number
+  /** Extra zoom (1 = planned scale). */
+  scale?: number
+  /** Extra clockwise rotation of the portrait, degrees. */
+  rotateDeg?: number
+}
+
 /**
  * Render the spec-sized portrait: inverse-mapped bilinear sampling with
  * premultiplied alpha and edge-clamped extension (out-of-bounds areas repeat
  * the nearest edge pixel — for solid-background photos this reads as a clean
  * background extension, which is exactly what exam portals expect).
  */
-export function renderToSpec(src: RgbaImage, face: FaceLandmarks, target: CropTarget): RgbaImage {
+export function renderToSpec(
+  src: RgbaImage,
+  face: FaceLandmarks,
+  target: CropTarget,
+  adjust: CropAdjust = {},
+): RgbaImage {
   const plan = planCrop(face, target)
   const out = blankImage(plan.width, plan.height)
   const { data: sd, width: sw, height: sh } = src
   const { data: od } = out
 
-  const s = plan.scale
-  const cos = Math.cos(face.eyeLineAngle)
-  const sin = Math.sin(face.eyeLineAngle)
+  const s = plan.scale * (adjust.scale ?? 1)
+  // user rotation adds to the counter-roll: sampling angle = roll − userRot
+  const rollRad = face.eyeLineAngle - ((adjust.rotateDeg ?? 0) * Math.PI) / 180
+  const cos = Math.cos(rollRad)
+  const sin = Math.sin(rollRad)
   const cx = face.eyesCenter.x
   const cy = face.eyesCenter.y
-  const halfW = plan.width / 2
+  const anchorX = plan.width / 2 + (adjust.dx ?? 0)
+  const anchorY = plan.eyeY + (adjust.dy ?? 0)
 
   for (let oy = 0; oy < plan.height; oy++) {
     for (let ox = 0; ox < plan.width; ox++) {
       // inverse transform: canvas → upright frame → source frame
-      const ux = (ox + 0.5 - halfW) / s
-      const uy = (oy + 0.5 - plan.eyeY) / s
+      const ux = (ox + 0.5 - anchorX) / s
+      const uy = (oy + 0.5 - anchorY) / s
       // sample center in source coords (rotate by +roll around eyes center)
       const fx = cx + ux * cos - uy * sin - 0.5
       const fy = cy + ux * sin + uy * cos - 0.5

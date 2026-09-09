@@ -174,6 +174,44 @@ describe("renderToSpec", () => {
       }
   })
 
+  it("user adjust: dx/dy shift the anchor on the canvas", () => {
+    const face: FaceLandmarks = {
+      eyesCenter: { x: 200, y: 300 },
+      eyeLineAngle: 0,
+      headTop: { x: 200, y: 150 },
+      chin: { x: 200, y: 450 },
+    }
+    const src = markedSource(400, 600, [[face.eyesCenter, RED]])
+    const base = renderToSpec(src, face, target)
+    const shifted = renderToSpec(src, face, target, { dx: 20, dy: 30 })
+    const b = findMarker(base, RED)
+    const s = findMarker(shifted, RED)
+    expect(s.x - b.x).toBeCloseTo(20, 0)
+    expect(s.y - b.y).toBeCloseTo(30, 0)
+  })
+
+  it("user adjust: scale zooms around the anchor", () => {
+    const face: FaceLandmarks = {
+      eyesCenter: { x: 200, y: 300 },
+      eyeLineAngle: 0,
+      headTop: { x: 200, y: 150 },
+      chin: { x: 200, y: 450 },
+    }
+    const src = markedSource(400, 600, [
+      [face.eyesCenter, RED],
+      [face.chin, BLUE],
+    ])
+    const base = renderToSpec(src, face, target)
+    const zoomed = renderToSpec(src, face, target, { scale: 1.2 })
+    // anchor (eye) stays put; chin moves further down by 20% of its offset
+    const eyeB = findMarker(base, RED)
+    const chinB = findMarker(base, BLUE)
+    const eyeZ = findMarker(zoomed, RED)
+    const chinZ = findMarker(zoomed, BLUE)
+    expect(Math.abs(eyeZ.y - eyeB.y)).toBeLessThan(1.5)
+    expect(chinZ.y - eyeZ.y).toBeCloseTo((chinB.y - eyeB.y) * 1.2, 0)
+  })
+
   it("keeps premultiplied sampling clean across alpha edges", () => {
     // left half: opaque red portrait; right half: transparent (post-matting)
     const px = new Uint8ClampedArray(400 * 600 * 4)
