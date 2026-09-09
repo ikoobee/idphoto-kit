@@ -106,7 +106,7 @@ export function App() {
         face,
         target,
         adjust: { ...NO_ADJUST },
-        output: blank(source, target),
+        output: blank(target),
         kb: null,
         exifOrientation: orientation,
       }
@@ -302,7 +302,7 @@ export function App() {
   )
 }
 
-function blank(source: RgbaImage, target: CropTarget): RgbaImage {
+function blank(target: CropTarget): RgbaImage {
   return {
     data: new Uint8ClampedArray(target.width * target.height * 4),
     width: target.width,

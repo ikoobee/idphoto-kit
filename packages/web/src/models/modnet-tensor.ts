@@ -16,14 +16,16 @@ export interface ModnetInput {
  */
 export function buildModnetInput(img: RgbaImage, size = MODNET_INPUT_SIZE): ModnetInput {
   const scaled = resizeBilinear(img, size, size)
+  const src = scaled.data
   const data = new Float32Array(3 * size * size)
+  const norm = (i: number) => ((src[i] ?? 0) / 255 - 0.5) / 0.5
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
       const rgba = (y * size + x) * 4
       const chw = y * size + x
-      data[chw] = (scaled.data[rgba]! / 255 - 0.5) / 0.5 // R plane
-      data[size * size + chw] = (scaled.data[rgba + 1]! / 255 - 0.5) / 0.5 // G plane
-      data[2 * size * size + chw] = (scaled.data[rgba + 2]! / 255 - 0.5) / 0.5 // B plane
+      data[chw] = norm(rgba) // R plane
+      data[size * size + chw] = norm(rgba + 1) // G plane
+      data[2 * size * size + chw] = norm(rgba + 2) // B plane
     }
   }
   return { data, dims: [1, 3, size, size] }

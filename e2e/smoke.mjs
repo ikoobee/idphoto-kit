@@ -29,7 +29,7 @@ async function main() {
 
     // 2. pick the CET spec (144×192, ≤30KB)
     await page.locator(".card", { hasText: "CET-4/6" }).first().click()
-    check("drop zone appears after selecting a spec", await page.locator(".drop").count() >= 1)
+    check("drop zone appears after selecting a spec", (await page.locator(".drop").count()) >= 1)
 
     // 3. upload a synthetic photo via DataTransfer (procedural portrait-ish blob)
     await page.evaluate(() => {

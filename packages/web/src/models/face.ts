@@ -46,7 +46,10 @@ export class MediaPipeFace {
     const face = result.faceLandmarks?.[0]
     if (!face) return null
 
-    const px = (i: number) => ({ x: face[i]!.x * img.width, y: face[i]!.y * img.height })
+    const px = (i: number) => {
+      const lm = face[i]
+      return lm ? { x: lm.x * img.width, y: lm.y * img.height } : { x: 0, y: 0 }
+    }
     const right = px(33)
     const left = px(263)
     const eyesCenter = { x: (right.x + left.x) / 2, y: (right.y + left.y) / 2 }

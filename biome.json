@@ -23,7 +23,7 @@
   },
   "overrides": [
     {
-      "includes": ["packages/core/**"],
+      "includes": ["packages/core/**", "**/test/**"],
       "linter": {
         "rules": {
           "style": {
