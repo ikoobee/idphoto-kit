@@ -11,7 +11,7 @@ import {
   resizeBilinear,
 } from "@idphoto-kit/core"
 import type { Spec } from "@idphoto-kit/specs/browser"
-import { useMemo, useRef, useState } from "preact/hooks"
+import { useEffect, useMemo, useRef, useState } from "preact/hooks"
 import { loadSpecs } from "./data.ts"
 import { MediaPipeFace } from "./models/face.ts"
 
@@ -22,6 +22,7 @@ interface Processed {
   face: FaceLandmarks | null
   target: CropTarget
   adjust: CropAdjust
+  output: RgbaImage
   kb: number | null
   exifOrientation: number | null
 }
@@ -35,15 +36,22 @@ export function App() {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const faceModel = useMemo(() => new MediaPipeFace(), [])
 
-  function paint(out: RgbaImage) {
+  // Paint AFTER the canvas is mounted: proc changes land in the DOM first
+  // (the processing view stays mounted from the moment a file is picked),
+  // then this effect repaints — never paint into a not-yet-existing canvas.
+  useEffect(() => {
     const canvas = canvasRef.current
-    if (!canvas) throw new Error("canvas missing")
-    canvas.width = out.width
-    canvas.height = out.height
+    if (!proc?.output || !canvas) return
+    canvas.width = proc.output.width
+    canvas.height = proc.output.height
     const ctx = canvas.getContext("2d")
-    if (!ctx) throw new Error("2D canvas unavailable")
-    ctx.putImageData(new ImageData(new Uint8ClampedArray(out.data), out.width, out.height), 0, 0)
-  }
+    if (!ctx) return
+    ctx.putImageData(
+      new ImageData(new Uint8ClampedArray(proc.output.data), proc.output.width, proc.output.height),
+      0,
+      0,
+    )
+  }, [proc])
 
   async function measureKb(out: RgbaImage): Promise<number> {
     const canvas = document.createElement("canvas")
@@ -61,14 +69,13 @@ export function App() {
     )
   }
 
-  /** Re-render the spec output for the current source + adjust and repaint. */
-  async function rerender(state: Processed): Promise<Processed> {
-    const out = state.face
+  /** Compute the spec output (no painting — the effect owns the canvas). */
+  async function compute(state: Processed): Promise<Processed> {
+    const output = state.face
       ? renderToSpec(state.source, state.face, state.target, state.adjust)
       : fitCenter(state.source, state.target.width, state.target.height)
-    paint(out)
-    const kb = await measureKb(out)
-    return { ...state, kb }
+    const kb = await measureKb(output)
+    return { ...state, output, kb }
   }
 
   async function onFile(file: File) {
@@ -94,16 +101,16 @@ export function App() {
         height: selected.size.height,
         face: selected.face,
       }
-      let state: Processed = {
+      const state: Processed = {
         source,
         face,
         target,
         adjust: { ...NO_ADJUST },
+        output: blank(source, target),
         kb: null,
         exifOrientation: orientation,
       }
-      state = await rerender(state)
-      setProc(state)
+      setProc(await compute(state))
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e))
     } finally {
@@ -112,14 +119,13 @@ export function App() {
   }
 
   async function onAdjust(patch: Partial<CropAdjust>) {
-    if (!proc) return
-    const next = { ...proc.adjust, ...patch }
-    setProc({ ...proc, adjust: next }) // instant visual update
-    const updated = await rerender({ ...proc, adjust: next })
-    setProc(updated)
+    if (!proc || busy) return
+    setProc({ ...proc, adjust: { ...proc.adjust, ...patch } })
+    setProc(await compute({ ...proc, adjust: { ...proc.adjust, ...patch } }))
   }
 
   const plan: CropPlan | null = proc?.face ? planCrop(proc.face, proc.target) : null
+  const inFlow = selected !== null && (busy || proc !== null)
 
   return (
     <main>
@@ -130,10 +136,39 @@ export function App() {
         <p>Privacy-first ID photos — everything stays in your browser.</p>
       </header>
 
-      {!selected || !proc ? (
+      {!inFlow && selected && !busy ? (
+        <>
+          <SpecsPage specs={specs} selected={selected} onSelect={(s) => setSelected(s)} />
+          <section class="work" style="margin-top:16px">
+            <div class="bar">
+              <button type="button" class="ghost" onClick={() => setSelected(null)}>
+                ← all specs
+              </button>
+              <span class="dim">
+                {selected.name.en} · {selected.size.width}×{selected.size.height}px
+                {selected.file.maxKB ? ` · ≤${selected.file.maxKB}KB` : ""}
+              </span>
+            </div>
+            <label class="drop">
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp"
+                disabled={busy}
+                onChange={(e) => {
+                  const f = e.currentTarget.files?.[0]
+                  if (f) onFile(f)
+                }}
+              />
+              📁 Choose a photo (never uploaded anywhere)
+            </label>
+            {error && <p class="err">{error}</p>}
+            <p class="dim small">Face-anchored alignment runs on-device via MediaPipe.</p>
+          </section>
+        </>
+      ) : !inFlow ? (
         <SpecsPage
           specs={specs}
-          selected={selected}
+          selected={null}
           onSelect={(s) => {
             setSelected(s)
             setProc(null)
@@ -153,141 +188,126 @@ export function App() {
               ← all specs
             </button>
             <span class="dim">
-              {selected.name.en} · {selected.size.width}×{selected.size.height}px
-              {selected.file.maxKB ? ` · ≤${selected.file.maxKB}KB` : ""}
+              {selected?.name.en} · {selected?.size.width}×{selected?.size.height}px
+              {selected?.file.maxKB ? ` · ≤${selected.file.maxKB}KB` : ""}
             </span>
           </div>
 
           <div class="split">
             <div class="stage">
-              <canvas ref={canvasRef} />
+              <canvas ref={canvasRef} style={proc ? "" : "visibility:hidden"} />
               {busy && <p class="dim">Processing…</p>}
               {error && <p class="err">{error}</p>}
-              <label class="drop small-pad">
-                <input
-                  type="file"
-                  accept="image/jpeg,image/png,image/webp"
-                  disabled={busy}
-                  onChange={(e) => {
-                    const f = e.currentTarget.files?.[0]
-                    if (f) onFile(f)
-                  }}
-                />
-                {busy ? "Processing…" : "📁 Change photo (never uploaded anywhere)"}
-              </label>
+              {proc && (
+                <label class="drop small-pad">
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    disabled={busy}
+                    onChange={(e) => {
+                      const f = e.currentTarget.files?.[0]
+                      if (f) onFile(f)
+                    }}
+                  />
+                  📁 Change photo (never uploaded anywhere)
+                </label>
+              )}
             </div>
 
-            <aside class="panel">
-              <h3>Fine-tune</h3>
-              <Slider
-                label="Zoom"
-                min={0.8}
-                max={1.4}
-                step={0.01}
-                value={proc.adjust.scale ?? 1}
-                onInput={(v) => onAdjust({ scale: v })}
-              />
-              <Slider
-                label="Horizontal"
-                min={-60}
-                max={60}
-                step={1}
-                value={proc.adjust.dx ?? 0}
-                onInput={(v) => onAdjust({ dx: v })}
-              />
-              <Slider
-                label="Vertical"
-                min={-60}
-                max={60}
-                step={1}
-                value={proc.adjust.dy ?? 0}
-                onInput={(v) => onAdjust({ dy: v })}
-              />
-              <Slider
-                label="Rotate°"
-                min={-10}
-                max={10}
-                step={0.5}
-                value={proc.adjust.rotateDeg ?? 0}
-                onInput={(v) => onAdjust({ rotateDeg: v })}
-              />
-
-              <h3>Background</h3>
-              <div class="dots big">
-                {selected.background.allowed.map((c) => (
-                  <i key={c} style={`background:${c}`} title={c} />
-                ))}
-              </div>
-              <p class="dim small">
-                Background swap ships with the matting model asset (Release models-v0, pending
-                upload). The face-anchored crop above is fully functional.
-              </p>
-
-              <h3>Checklist</h3>
-              <ul class="checks">
-                <Check ok label={`Size ${selected.size.width}×${selected.size.height}px`} />
-                <Check
-                  ok={proc.face !== null}
-                  label={
-                    proc.face
-                      ? "Face-anchored (eye line / head ratio)"
-                      : "Face not found — center crop fallback"
-                  }
+            {proc && (
+              <aside class="panel">
+                <h3>Fine-tune</h3>
+                <Slider
+                  label="Zoom"
+                  min={0.8}
+                  max={1.4}
+                  step={0.01}
+                  value={proc.adjust.scale ?? 1}
+                  onInput={(v) => onAdjust({ scale: v })}
                 />
-                {plan?.warnings.map((w) => (
-                  <Check key={w.code} ok={false} label={w.message} />
-                ))}
-                {proc.exifOrientation && proc.exifOrientation > 1 ? (
-                  <Check ok label={`EXIF orientation ${proc.exifOrientation} corrected`} />
-                ) : null}
-                {selected.file.maxKB ? (
-                  proc.kb !== null ? (
-                    <Check
-                      ok={proc.kb <= selected.file.maxKB}
-                      label={`File size ${proc.kb}KB / ≤${selected.file.maxKB}KB${
-                        proc.kb > selected.file.maxKB
-                          ? " — target-KB export compresses this on download"
-                          : ""
-                      }`}
-                    />
-                  ) : (
-                    <Check ok label="Measuring file size…" />
-                  )
-                ) : null}
-              </ul>
-            </aside>
-          </div>
-        </section>
-      )}
+                <Slider
+                  label="Horizontal"
+                  min={-60}
+                  max={60}
+                  step={1}
+                  value={proc.adjust.dx ?? 0}
+                  onInput={(v) => onAdjust({ dx: v })}
+                />
+                <Slider
+                  label="Vertical"
+                  min={-60}
+                  max={60}
+                  step={1}
+                  value={proc.adjust.dy ?? 0}
+                  onInput={(v) => onAdjust({ dy: v })}
+                />
+                <Slider
+                  label="Rotate°"
+                  min={-10}
+                  max={10}
+                  step={0.5}
+                  value={proc.adjust.rotateDeg ?? 0}
+                  onInput={(v) => onAdjust({ rotateDeg: v })}
+                />
 
-      {selected && !proc && !busy && (
-        <section class="work">
-          <div class="bar">
-            <button type="button" class="ghost" onClick={() => setSelected(null)}>
-              ← all specs
-            </button>
-            <span class="dim">
-              {selected.name.en} · {selected.size.width}×{selected.size.height}px
-            </span>
+                <h3>Background</h3>
+                <div class="dots big">
+                  {selected?.background.allowed.map((c) => (
+                    <i key={c} style={`background:${c}`} title={c} />
+                  ))}
+                </div>
+                <p class="dim small">
+                  Background swap ships with the matting model asset (Release models-v0, pending
+                  upload). The face-anchored crop above is fully functional.
+                </p>
+
+                <h3>Checklist</h3>
+                <ul class="checks">
+                  <Check ok label={`Size ${proc.target.width}×${proc.target.height}px`} />
+                  <Check
+                    ok={proc.face !== null}
+                    label={
+                      proc.face
+                        ? "Face-anchored (eye line / head ratio)"
+                        : "Face not found — center crop fallback"
+                    }
+                  />
+                  {plan?.warnings.map((w) => (
+                    <Check key={w.code} ok={false} label={w.message} />
+                  ))}
+                  {proc.exifOrientation && proc.exifOrientation > 1 ? (
+                    <Check ok label={`EXIF orientation ${proc.exifOrientation} corrected`} />
+                  ) : null}
+                  {selected?.file.maxKB ? (
+                    proc.kb !== null ? (
+                      <Check
+                        ok={proc.kb <= selected.file.maxKB}
+                        label={`File size ${proc.kb}KB / ≤${selected.file.maxKB}KB${
+                          proc.kb > selected.file.maxKB
+                            ? " — target-KB export compresses this on download"
+                            : ""
+                        }`}
+                      />
+                    ) : (
+                      <Check ok label="Measuring file size…" />
+                    )
+                  ) : null}
+                </ul>
+              </aside>
+            )}
           </div>
-          <label class="drop">
-            <input
-              type="file"
-              accept="image/jpeg,image/png,image/webp"
-              disabled={busy}
-              onChange={(e) => {
-                const f = e.currentTarget.files?.[0]
-                if (f) onFile(f)
-              }}
-            />
-            {busy ? "Processing…" : "📁 Choose a photo (never uploaded anywhere)"}
-          </label>
-          {error && <p class="err">{error}</p>}
-          <p class="dim small">Face-anchored alignment runs on-device via MediaPipe.</p>
         </section>
       )}
     </main>
   )
+}
+
+function blank(source: RgbaImage, target: CropTarget): RgbaImage {
+  return {
+    data: new Uint8ClampedArray(target.width * target.height * 4),
+    width: target.width,
+    height: target.height,
+  }
 }
 
 function SpecsPage(props: { specs: Spec[]; selected: Spec | null; onSelect: (s: Spec) => void }) {
