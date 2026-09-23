@@ -42,11 +42,20 @@ pnpm lint     # biome
 pnpm specs:check  # validate the spec library (zod + business rules)
 ```
 
-What works today: pick a spec from the built-in library (16 verified entries), drop in a photo
-(EXIF orientation corrected on the fly), get a center-cropped, exactly-sized JPEG with a live
-KB readout against the spec's size cap. Everything runs locally — no network calls carry image
-data. Face-anchored alignment (eye line / head-height ratio), background swap, and target-KB
-compression land in the upcoming milestones; see [CHANGELOG](CHANGELOG.md).
+What works today — a four-step flow, all local:
+
+- **Spec**: pick from the built-in library (16 verified entries) or define a custom size.
+- **Capture**: shoot with the camera (face guide oval, graceful fallback to upload) or drop in a
+  photo (EXIF orientation corrected on the fly).
+- **Edit**: face-anchored alignment (eye line / head-height ratio), background swap (MODNet
+  matte), outfit patching (suit / career / academic), pan/zoom/rotate + brightness/contrast.
+- **Export**: target-KB JPEG compression (binary search, exam ≤30KB caps), transparent PNG,
+  6-inch print sheet with cut guides.
+
+Everything runs locally — no network call ever carries image data. When the matting model
+asset is unavailable the app degrades explicitly (crop keeps working, notice + retry);
+see [docs/models.md](docs/models.md) for the model distribution chain. See
+[CHANGELOG](CHANGELOG.md) for the roadmap.
 
 ## Contributing
 

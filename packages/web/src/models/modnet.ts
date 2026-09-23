@@ -1,27 +1,15 @@
 import { type AlphaMat, type MattingModel, type RgbaImage, refineAlpha } from "@idphoto-kit/core"
-import { cachedModelBytes } from "./model-cache.ts"
+import { fetchModelBytes, MODNET_MANIFEST } from "./manifest.ts"
 import { alphaFromModnetOutput, buildModnetInput, MODNET_INPUT_SIZE } from "./modnet-tensor.ts"
 
 /**
- * MODNet portrait matting via ONNX Runtime Web. Model bytes are fetched from
- * the Release Assets URL once and cached in IndexedDB — no image data ever
- * leaves the browser; the fetch carries only the model download.
- *
- * NOTE: the URL below is the planned models-v0 release asset. Until the model
- * is uploaded this adapter cannot run; the UI surfaces that state instead of
- * failing silently.
+ * MODNet portrait matting via ONNX Runtime Web. Model bytes resolve through
+ * the manifest source chain (local drop-in → Release Assets) and cache in
+ * IndexedDB — no image data ever leaves the browser; the fetch carries only
+ * the model download.
  */
-export const DEFAULT_MODNET_URL =
-  "https://github.com/ikoobee/idphoto-kit/releases/download/models-v0/modnet-ppm-512-int8.onnx"
-
-export interface ModnetOptions {
-  url?: string
-}
-
 export class ModnetOnnx implements MattingModel {
   private session: Promise<InferenceSessionLike> | null = null
-
-  constructor(private readonly opts: ModnetOptions = {}) {}
 
   /** Drop a failed load so a user-triggered retry starts clean. */
   reset(): void {
@@ -31,9 +19,14 @@ export class ModnetOnnx implements MattingModel {
   private async load(): Promise<InferenceSessionLike> {
     this.session ??= (async () => {
       const ort = await import("onnxruntime-web")
-      const bytes = await cachedModelBytes(this.opts.url ?? DEFAULT_MODNET_URL)
+      const bytes = await fetchModelBytes(MODNET_MANIFEST)
       return ort.InferenceSession.create(bytes)
     })()
+    // A rejected promise would otherwise be cached forever — clear it so the
+    // next call (or an explicit reset) retries the source chain.
+    this.session.catch(() => {
+      this.session = null
+    })
     return this.session
   }
 

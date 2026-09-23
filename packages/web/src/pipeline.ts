@@ -13,7 +13,6 @@ import {
   renderToSpec,
   resizeBilinear,
   type SilhouetteMetrics,
-  silhouetteMetrics,
 } from "@idphoto-kit/core"
 import { renderOutfitLayer } from "./outfit-render.ts"
 

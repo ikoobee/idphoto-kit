@@ -1,8 +1,13 @@
 /**
- * Browser-level smoke test: spec page → upload → processing view → canvas output.
+ * Browser-level smoke test for the v2 four-step flow:
+ *   #/specs → #/capture (upload path) → #/edit → #/export
  * Drives the locally installed Edge (channel:"msedge") — no browser download.
  * Start the dev server first, then:
  *   E2E_BASE=http://localhost:5199 node e2e/smoke.mjs
+ *
+ * The matting model is expected to be unavailable in CI (Release asset not
+ * published yet) — the run asserts the DEGRADED path: crop still works, the
+ * matte-down notice shows, export still fits the size budget.
  */
 import { chromium } from "playwright"
 
@@ -19,17 +24,20 @@ async function main() {
     console.log(`${cond ? "✓" : "✗"} ${name}`)
     if (!cond) failures.push(name)
   }
+  const waitForHash = (hash, timeout = 90_000) =>
+    page.waitForURL((u) => u.hash === hash, { timeout })
 
   try {
-    await page.goto(BASE, { waitUntil: "networkidle" })
+    await page.goto(BASE, { waitUntil: "domcontentloaded" })
 
     // 1. spec cards render from the /specs library
     const cards = await page.locator(".card").count()
     check(`spec cards render (${cards})`, cards >= 10)
 
-    // 2. pick the CET spec (144×192, ≤30KB)
-    await page.locator(".card", { hasText: "CET-4/6" }).first().click()
-    check("drop zone appears after selecting a spec", (await page.locator(".drop").count()) >= 1)
+    // 2. pick the CET spec → capture page
+    await page.locator(".card", { hasText: "四六级" }).first().click()
+    await waitForHash("#/capture")
+    check("capture page with drop zone", (await page.locator(".drop").count()) === 1)
 
     // 3. upload a synthetic photo via DataTransfer (procedural portrait-ish blob)
     await page.evaluate(() => {
@@ -61,12 +69,18 @@ async function main() {
       input.dispatchEvent(new Event("change", { bubbles: true }))
     })
 
-    // 4. processing completes: checklist + canvas painted (allow CDN model time)
-    await page.waitForSelector(".checks", { timeout: 90_000 })
-    check("checklist appears", true)
-
+    // 4. processing lands on the edit page with a painted canvas (CDN model time allowed)
+    await waitForHash("#/edit")
+    await page.waitForFunction(
+      () => {
+        const cv = document.querySelector("canvas.preview")
+        return cv instanceof HTMLCanvasElement && cv.width === 144 && cv.height === 192
+      },
+      null,
+      { timeout: 90_000, polling: 250 },
+    )
     const canvasInfo = await page.evaluate(() => {
-      const cv = document.querySelector("canvas")
+      const cv = document.querySelector("canvas.preview")
       if (!cv || cv.width === 0) return null
       const ctx = cv.getContext("2d")
       const data = ctx.getImageData(0, 0, cv.width, cv.height).data
@@ -79,19 +93,39 @@ async function main() {
       canvasInfo !== null && canvasInfo.w === 144 && canvasInfo.h === 192 && canvasInfo.sum > 0,
     )
 
-    // 5. size check reflects the spec cap (CET ≤30KB)
-    const checklistText = await page.locator(".checks").innerText()
-    check("file-size row present", /File size|Measuring/.test(checklistText))
+    // 5. degraded matting surfaces as a notice (or, with a local model, does not)
+    const matteDown = await page.locator(".matteDown").count()
+    const bgTab = await page.locator(".tab", { hasText: /背景|Background/ }).count()
+    check("background tab present", bgTab === 1)
+    console.log(
+      `  matting degraded: ${matteDown > 0 ? "yes (expected until models-v0)" : "no (model present)"}`,
+    )
 
-    // 6. fine-tune slider reacts without killing the view
-    await page.locator('.slider input[type="range"]').first().fill("1.2")
-    await page.waitForTimeout(800)
-    check("view alive after slider input", (await page.locator(".checks").count()) === 1)
+    // 6. checks tab lists the spec cap (CET ≤30KB)
+    await page.locator(".tab", { hasText: /检查|Checks/ }).click()
+    await page.waitForSelector(".checks li")
+    const checklistText = await page.locator(".checks").innerText()
+    check("file-size row present", /文件体积|File size/.test(checklistText))
+
+    // 7. adjust slider reacts without killing the view
+    await page.locator(".tab", { hasText: /调整|Adjust/ }).click()
+    await page.locator('.tabbody input[type="range"]').first().fill("10")
+    await page.waitForTimeout(600)
+    check("view alive after slider input", (await page.locator(".preview").count()) === 1)
+
+    // 8. export page renders the download trio and fits the KB budget
+    await page.locator("button", { hasText: /导出 →|Export →/ }).click()
+    await waitForHash("#/export")
+    await page.waitForSelector('button:has-text("下载电子照")', { timeout: 60_000 })
+    const kbText = await page.locator(".kbctl").innerText()
+    check("export fits target", /达标|within target/.test(kbText))
   } catch (e) {
     failures.push(`flow error: ${e instanceof Error ? e.message : String(e)}`)
   }
 
-  const blockingErrors = pageErrors.filter((e) => !e.includes("face detection unavailable"))
+  const blockingErrors = pageErrors.filter(
+    (e) => !e.includes("face detection unavailable") && !e.includes("matting unavailable"),
+  )
   check("no unexpected page errors", blockingErrors.length === 0)
   if (blockingErrors.length) console.log("  page errors:", blockingErrors.slice(0, 3))
 

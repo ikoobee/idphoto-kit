@@ -1038,13 +1038,12 @@ function ExportPage(props: { t: TFn; session: Session; onRestart: () => void }) 
             <button
               type="button"
               class="btn ghost wide"
-              onClick={() =>
-                downloadBytes(
-                  results.trans!.bytes,
-                  `idphoto_${slug}_${dims}_alpha.png`,
-                  "image/png",
-                )
-              }
+              onClick={() => {
+                const trans = results.trans
+                if (trans) {
+                  downloadBytes(trans.bytes, `idphoto_${slug}_${dims}_alpha.png`, "image/png")
+                }
+              }}
             >
               {t("dlTrans")}
             </button>
