@@ -7,8 +7,11 @@ import {
   type CropAdjust,
   type CropTarget,
   composeBackground,
+  decontaminateEdges,
+  estimateBackgroundColor,
   type FaceLandmarks,
   mergeOutfitLayer,
+  type OutfitId,
   type RgbaImage,
   renderToSpec,
   resizeBilinear,
@@ -17,13 +20,14 @@ import {
 import { renderOutfitLayer } from "./outfit-render.ts"
 
 /**
- * Edit pipeline wiring: tone → outfit patch → background composite → spec
- * render. Everything here is synchronous pixel work over core pure functions;
- * models (face / matte) run before, at capture time.
+ * Edit pipeline wiring: tone → outfit patch → edge decontamination →
+ * background composite → spec render. Everything here is synchronous pixel
+ * work over core pure functions; models (face / matte) run before, at capture
+ * time.
  */
 export interface EditOptions {
   tone: ColorAdjust
-  outfit: import("@idphoto-kit/core").OutfitId | null
+  outfit: OutfitId | null
   bg: BackgroundOption
   adjust: CropAdjust
 }
@@ -47,17 +51,99 @@ export function composePortrait(
   const toned = adjustColors(source, opts.tone)
   if (!prepared.alpha) return toned
 
+  // the old background's average color — the source of edge halos
+  const oldBg = estimateBackgroundColor(toned, prepared.alpha)
+
   let portrait = toned
   let alpha = prepared.alpha
   if (opts.outfit && prepared.silhouette) {
-    const seamFeather = Math.max(8, prepared.silhouette.headH * 0.1)
-    const shapes = buildOutfitShapes(opts.outfit, prepared.silhouette, source.height)
-    const layer = renderOutfitLayer(shapes, source.width, source.height)
-    const merged = mergeOutfitLayer(toned, alpha, layer, prepared.silhouette.shoulderY, seamFeather)
+    const sil = prepared.silhouette
+    const seamFeather = Math.max(14, sil.headH * 0.16)
+    const skin = estimateSkinTone(toned, prepared.alpha, sil)
+    const shapes = buildOutfitShapes(opts.outfit, sil, source.height, { skin })
+    const layer = renderOutfitLayer(shapes, source.width, source.height, {
+      lightFromLeft: lightFromLeft(toned, prepared.alpha, sil),
+    })
+    matchBrightness(layer, faceLuma(toned, prepared.alpha, sil))
+    const merged = mergeOutfitLayer(toned, alpha, layer, sil.shoulderY, seamFeather)
     portrait = merged.portrait
     alpha = merged.alpha
   }
+
+  if (oldBg) portrait = decontaminateEdges(portrait, alpha, oldBg)
   return composeBackground(portrait, alpha, opts.bg)
+}
+
+/** Average color of solidly-foreground pixels inside the head box. */
+function estimateSkinTone(
+  img: RgbaImage,
+  alpha: AlphaMat,
+  sil: SilhouetteMetrics,
+): [number, number, number] {
+  const y1 = Math.min(sil.chinY ?? sil.bbox.y0 + sil.headH, img.height)
+  let r = 0
+  let g = 0
+  let b = 0
+  let n = 0
+  for (let y = sil.bbox.y0; y < y1; y += 2) {
+    for (let x = sil.bbox.x0; x <= sil.bbox.x1; x += 2) {
+      const i = y * img.width + x
+      if ((alpha[i] ?? 255) < 200) continue
+      r += img.data[i * 4] ?? 0
+      g += img.data[i * 4 + 1] ?? 0
+      b += img.data[i * 4 + 2] ?? 0
+      n++
+    }
+  }
+  return n > 0 ? [r / n, g / n, b / n] : [229, 181, 140]
+}
+
+/** Mean luminance of the face region — drives garment brightness matching. */
+function faceLuma(img: RgbaImage, alpha: AlphaMat, sil: SilhouetteMetrics): number {
+  const [r, g, b] = estimateSkinTone(img, alpha, sil)
+  return 0.299 * r + 0.587 * g + 0.114 * b
+}
+
+/** Which side of the head is brighter — garment gradients follow the light. */
+function lightFromLeft(img: RgbaImage, alpha: AlphaMat, sil: SilhouetteMetrics): boolean {
+  const y1 = Math.min(sil.chinY ?? sil.bbox.y0 + sil.headH, img.height)
+  const midX = (sil.bbox.x0 + sil.bbox.x1) / 2
+  let lLuma = 0
+  let rLuma = 0
+  let ln_ = 0
+  let rn = 0
+  for (let y = sil.bbox.y0; y < y1; y += 3) {
+    for (let x = sil.bbox.x0; x <= sil.bbox.x1; x += 3) {
+      const i = y * img.width + x
+      if ((alpha[i] ?? 255) < 200) continue
+      const l =
+        0.299 * (img.data[i * 4] ?? 0) +
+        0.587 * (img.data[i * 4 + 1] ?? 0) +
+        0.114 * (img.data[i * 4 + 2] ?? 0)
+      if (x < midX) {
+        lLuma += l
+        ln_++
+      } else {
+        rLuma += l
+        rn++
+      }
+    }
+  }
+  if (ln_ === 0 || rn === 0) return true
+  return lLuma / ln_ >= rLuma / rn
+}
+
+/** Scale garment RGB toward the photo's exposure (default garment luma 190). */
+function matchBrightness(layer: RgbaImage, luma: number): void {
+  const k = Math.min(1.12, Math.max(0.85, luma / 190))
+  if (Math.abs(k - 1) < 0.02) return
+  const d = layer.data
+  for (let p = 0; p < d.length; p += 4) {
+    if ((d[p + 3] ?? 255) === 0) continue
+    d[p] *= k
+    d[p + 1] *= k
+    d[p + 2] *= k
+  }
 }
 
 /** Scale the cutout onto the spec canvas (face-anchored, or center fallback). */

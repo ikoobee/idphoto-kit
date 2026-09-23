@@ -20,7 +20,7 @@ function syntheticAlpha(): Uint8ClampedArray {
 }
 
 describe("silhouetteMetrics", () => {
-  it("locates head width, chin narrowing, and shoulder flare", () => {
+  it("locates head width, chin narrowing, shoulder flare, and shoulder extents", () => {
     const m = silhouetteMetrics(syntheticAlpha(), 100, 200)
     expect(m.headW).toBeCloseTo(40, 0)
     expect(m.chinY).toBe(60) // first row where width drops to 16 < 40*0.5
@@ -28,6 +28,8 @@ describe("silhouetteMetrics", () => {
     expect(m.headH).toBe(60)
     expect(m.bbox.x0).toBe(10)
     expect(m.bbox.x1).toBe(89)
+    expect(m.shoulderLX).toBe(10) // shoulder row extents, not head-width formula
+    expect(m.shoulderRX).toBe(89)
   })
 
   it("degrades to a sane centered box on an empty matte", () => {
@@ -42,14 +44,27 @@ describe("buildOutfitShapes", () => {
   const ids: OutfitId[] = ["suit", "career", "academic"]
   const m = silhouetteMetrics(syntheticAlpha(), 100, 200)
 
-  it.each(ids)("%s yields only in-bounds, hex-filled polygons", (id) => {
+  it.each(ids)("%s yields in-bounds shapes with valid paints", (id) => {
     const shapes = buildOutfitShapes(id, m, 200)
-    expect(shapes.length).toBeGreaterThan(0)
+    expect(shapes.length).toBeGreaterThanOrEqual(3)
     for (const s of shapes) {
-      expect(s.fill).toMatch(/^#[0-9a-fA-F]{6}$/)
-      expect(s.path[0]?.op).toBe("M")
+      expect(["M", "E"]).toContain(s.path[0]?.op) // radial layers open with an ellipse
+      if (s.paint.kind === "solid")
+        expect(s.paint.color).toMatch(/^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/)
+      if (s.paint.kind === "linear") {
+        expect(["v", "h"]).toContain(s.paint.dir)
+        expect(s.paint.stops.length).toBeGreaterThanOrEqual(2)
+      }
+      if (s.paint.kind === "radial") expect(s.paint.r).toBeGreaterThan(0)
       for (const cmd of s.path) {
         if (cmd.op === "Z") continue
+        if (cmd.op === "E") {
+          expect(cmd.cx - cmd.rx).toBeGreaterThanOrEqual(-5)
+          expect(cmd.cx + cmd.rx).toBeLessThanOrEqual(105)
+          expect(cmd.cy - cmd.ry).toBeGreaterThanOrEqual(-5)
+          expect(cmd.cy + cmd.ry).toBeLessThanOrEqual(200)
+          continue
+        }
         expect(cmd.x).toBeGreaterThanOrEqual(-5)
         expect(cmd.x).toBeLessThanOrEqual(105)
         expect(cmd.y).toBeGreaterThanOrEqual(-5)
@@ -58,14 +73,34 @@ describe("buildOutfitShapes", () => {
     }
   })
 
-  it("anchors the template symmetric around the silhouette center", () => {
+  it("anchors the garment on the real shoulder extents, not the canvas", () => {
     const shapes = buildOutfitShapes("suit", m, 200)
-    const xs = shapes[0]!.path.flatMap((c) => (c.op === "Z" ? [] : [c.x]))
+    const body = shapes[0]!
+    const xs = body.path.flatMap((c) =>
+      c.op === "M" || c.op === "L" ? [c.x] : c.op === "Q" ? [c.x] : [],
+    )
     const minX = Math.min(...xs)
     const maxX = Math.max(...xs)
-    expect((minX + maxX) / 2).toBeCloseTo((m.bbox.x0 + m.bbox.x1) / 2, 6) // centered on the person
-    expect(maxX - minX).toBeGreaterThan(m.headW) // shoulder-wide, not neck-wide
+    expect(maxX - minX).toBeGreaterThan(m.headW) // shoulder-wide
     expect(maxX - minX).toBeLessThan(100) // not canvas-wide
+    // centered on the silhouette
+    expect((minX + maxX) / 2).toBeCloseTo((m.bbox.x0 + m.bbox.x1) / 2, 0)
+  })
+
+  it("includes the neck-blend and chin-shadow finishing layers", () => {
+    for (const id of ids) {
+      const shapes = buildOutfitShapes(id, m, 200)
+      const radials = shapes.filter((s) => s.paint.kind === "radial")
+      expect(radials.length).toBeGreaterThanOrEqual(2) // neck blend + chin AO
+    }
+  })
+
+  it("takes the collar skin tone from style options", () => {
+    const shapes = buildOutfitShapes("suit", m, 200, { skin: [255, 0, 0] })
+    const blend = shapes.find(
+      (s) => s.paint.kind === "radial" && s.paint.stops[0]![1].includes("255,0,0"),
+    )
+    expect(blend).toBeDefined()
   })
 })
 
@@ -104,15 +139,12 @@ describe("mergeOutfitLayer", () => {
 
   it("clips the outfit to the person silhouette", () => {
     const person = solid([255, 0, 0, 255])
-    const alpha = new Uint8ClampedArray(w * h).fill(0) // no silhouette at all
-    alpha.fill(255, 0, w * h) // …then fully restored: control case below
+    const alpha = new Uint8ClampedArray(w * h).fill(255)
     const outfit = solid([0, 0, 255, 255])
-    const withSilhouette = mergeOutfitLayer(person, alpha, outfit, seamY, feather)
-    expect(withSilhouette.alpha[9 * w]).toBe(255)
+    expect(mergeOutfitLayer(person, alpha, outfit, seamY, feather).alpha[9 * w]).toBe(255)
 
-    const empty = new Uint8ClampedArray(w * h) // truly empty silhouette
-    const without = mergeOutfitLayer(person, empty, outfit, seamY, feather)
-    expect(without.alpha[9 * w]).toBe(0) // outfit suppressed without a person
+    const empty = new Uint8ClampedArray(w * h) // no silhouette → outfit suppressed
+    expect(mergeOutfitLayer(person, empty, outfit, seamY, feather).alpha[9 * w]).toBe(0)
   })
 
   it("throws on dimension mismatch", () => {

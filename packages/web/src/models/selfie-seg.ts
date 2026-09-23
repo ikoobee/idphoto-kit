@@ -56,7 +56,13 @@ export class SelfieSegmenterMatte implements MattingModel {
       const mask = result.confidenceMasks?.[0]
       if (!mask) throw new Error("selfie segmenter returned no confidence mask")
       const alpha = upscaleMaskToAlpha(mask, input.width, input.height)
-      return refineAlpha(alpha, input.width, input.height)
+      // slightly tighter cut than the default band — decontamination (pipeline)
+      // handles the residual fringe, so a crisper cut keeps edges clean
+      return refineAlpha(alpha, input.width, input.height, {
+        lowCut: 0.42,
+        highCut: 0.62,
+        feather: 1,
+      })
     } finally {
       result.close()
     }
@@ -93,7 +99,7 @@ function upscaleMaskToAlpha(mask: MaskLike, width: number, height: number): Alph
   if (!sctx) throw new Error("2D canvas unavailable")
   const gray = sctx.createImageData(mw, mh)
   for (let i = 0; i < conf.length; i++) {
-    const v = conf[i]! * 255
+    const v = (conf[i] ?? 0) * 255
     gray.data[i * 4] = v
     gray.data[i * 4 + 1] = v
     gray.data[i * 4 + 2] = v

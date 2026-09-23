@@ -4,6 +4,8 @@ export type { CropAdjust, CropPlan, CropWarning, CropWarningCode } from "./align
 export { planCrop, renderToSpec } from "./align.ts"
 export type { BackgroundOption } from "./compose.ts"
 export { composeBackground, parseHexColor } from "./compose.ts"
+export type { DecontaminateOptions } from "./decontaminate.ts"
+export { decontaminateEdges, estimateBackgroundColor } from "./decontaminate.ts"
 export type { Orientation } from "./exif.ts"
 export { readJpegOrientation } from "./exif.ts"
 export type { FitOptions, JpegEncoder, TargetFitResult } from "./export.ts"
@@ -31,9 +33,12 @@ export type {
   OutfitBlend,
   OutfitId,
   OutfitShape,
+  OutfitStyleOptions,
+  Paint,
   PathCommand,
   SilhouetteMetrics,
   SilhouetteOptions,
+  SilhouetteOutline,
 } from "./outfit.ts"
 export { buildOutfitShapes, mergeOutfitLayer, silhouetteMetrics } from "./outfit.ts"
 export type { RgbaImage } from "./types.ts"

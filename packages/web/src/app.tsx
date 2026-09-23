@@ -882,6 +882,9 @@ function thumbFor(id: OutfitId | null): string {
     headW: 44,
     chinY: 66,
     shoulderY: 74,
+    shoulderLX: 22,
+    shoulderRX: 138,
+    outline: null,
     headH: 58,
   }
   const shapes: OutfitShape[] = buildOutfitShapes(id, fake, 160)
