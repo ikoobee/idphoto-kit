@@ -1,3 +1,5 @@
+export type { ColorAdjust } from "./adjust.ts"
+export { adjustColors } from "./adjust.ts"
 export type { CropAdjust, CropPlan, CropWarning, CropWarningCode } from "./align.ts"
 export { planCrop, renderToSpec } from "./align.ts"
 export type { BackgroundOption } from "./compose.ts"
@@ -25,5 +27,14 @@ export {
   rotate180,
   transpose,
 } from "./orient.ts"
+export type {
+  OutfitBlend,
+  OutfitId,
+  OutfitShape,
+  PathCommand,
+  SilhouetteMetrics,
+  SilhouetteOptions,
+} from "./outfit.ts"
+export { buildOutfitShapes, mergeOutfitLayer, silhouetteMetrics } from "./outfit.ts"
 export type { RgbaImage } from "./types.ts"
 export { blankImage, cloneImage, fromImageData, makeImage } from "./types.ts"
