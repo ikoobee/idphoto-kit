@@ -23,6 +23,11 @@ export class ModnetOnnx implements MattingModel {
 
   constructor(private readonly opts: ModnetOptions = {}) {}
 
+  /** Drop a failed load so a user-triggered retry starts clean. */
+  reset(): void {
+    this.session = null
+  }
+
   private async load(): Promise<InferenceSessionLike> {
     this.session ??= (async () => {
       const ort = await import("onnxruntime-web")
