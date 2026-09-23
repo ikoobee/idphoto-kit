@@ -63,7 +63,7 @@ const STRINGS: Record<string, Entry> = {
   demo: { zh: "没有照片？用示例照片体验 →", en: "No photo? Try the demo →" },
   procDecoding: { zh: "解码与方向矫正…", en: "Decoding & orientation…" },
   procFace: { zh: "人脸检测（MediaPipe）…", en: "Face detection (MediaPipe)…" },
-  procMatte: { zh: "人像抠图（MODNet）…", en: "Portrait matting (MODNet)…" },
+  procMatte: { zh: "人像抠图…", en: "Portrait matting…" },
   procMatteSkip: {
     zh: "抠图模型不可用，跳过（换底/换装将受限）",
     en: "Matting model unavailable, skipped (bg/outfit limited)",

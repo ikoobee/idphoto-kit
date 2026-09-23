@@ -21,7 +21,7 @@ import { loadSpecs } from "./data.ts"
 import { downloadBytes, encodePng, imageToCanvas, makeJpegEncoder } from "./encode.ts"
 import { type Lang, makeT } from "./i18n.ts"
 import { MediaPipeFace } from "./models/face.ts"
-import { ModnetOnnx } from "./models/modnet.ts"
+import { SelfieSegmenterMatte } from "./models/selfie-seg.ts"
 import { renderOutfitLayer } from "./outfit-render.ts"
 import {
   composePortrait,
@@ -91,7 +91,9 @@ export function App() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const faceModel = useMemo(() => new MediaPipeFace(), [])
-  const matteModel = useMemo(() => new ModnetOnnx(), [])
+  // default tier: MediaPipe selfie segmentation (CDN, always available);
+  // the MODNet ONNX upgrade tier activates via the manifest once models-v0 ships
+  const matteModel = useMemo(() => new SelfieSegmenterMatte(), [])
 
   useEffect(() => {
     document.documentElement.dataset.theme = dark ? "dark" : "light"

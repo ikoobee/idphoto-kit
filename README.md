@@ -47,8 +47,9 @@ What works today — a four-step flow, all local:
 - **Spec**: pick from the built-in library (16 verified entries) or define a custom size.
 - **Capture**: shoot with the camera (face guide oval, graceful fallback to upload) or drop in a
   photo (EXIF orientation corrected on the fly).
-- **Edit**: face-anchored alignment (eye line / head-height ratio), background swap (MODNet
-  matte), outfit patching (suit / career / academic), pan/zoom/rotate + brightness/contrast.
+- **Edit**: face-anchored alignment (eye line / head-height ratio), background swap (MediaPipe
+  selfie segmentation — active out of the box; MODNet upgrade tier for hair-level edges),
+  outfit patching (suit / career / academic), pan/zoom/rotate + brightness/contrast.
 - **Export**: target-KB JPEG compression (binary search, exam ≤30KB caps), transparent PNG,
   6-inch print sheet with cut guides.
 

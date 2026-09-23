@@ -93,13 +93,28 @@ async function main() {
       canvasInfo !== null && canvasInfo.w === 144 && canvasInfo.h === 192 && canvasInfo.sum > 0,
     )
 
-    // 5. degraded matting surfaces as a notice (or, with a local model, does not)
+    // 5. matting active by default (MediaPipe selfie segmentation via CDN)
     const matteDown = await page.locator(".matteDown").count()
+    check("matting active (no degraded notice)", matteDown === 0)
     const bgTab = await page.locator(".tab", { hasText: /背景|Background/ }).count()
     check("background tab present", bgTab === 1)
-    console.log(
-      `  matting degraded: ${matteDown > 0 ? "yes (expected until models-v0)" : "no (model present)"}`,
-    )
+
+    // 5b. background swap responds: CET allows white only by design — exercise
+    // the allowed swatch and the custom color input, preview stays painted
+    await page.locator(".tab", { hasText: /背景|Background/ }).click()
+    const swatches = await page.locator(".swatches .swatch:enabled")
+    check(`background swatch enabled (${await swatches.count()})`, (await swatches.count()) >= 1)
+    if ((await swatches.count()) >= 1) {
+      await swatches.first().click()
+      await page.waitForTimeout(600)
+      check("view alive after swatch swap", (await page.locator(".preview").count()) === 1)
+    }
+    const colorInput = page.locator('.swatches input[type="color"]')
+    if ((await colorInput.count()) === 1) {
+      await colorInput.fill("#438EDB")
+      await page.waitForTimeout(600)
+      check("view alive after custom color", (await page.locator(".preview").count()) === 1)
+    }
 
     // 6. checks tab lists the spec cap (CET ≤30KB)
     await page.locator(".tab", { hasText: /检查|Checks/ }).click()

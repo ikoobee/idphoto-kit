@@ -1,7 +1,18 @@
-# Model assets: conversion, distribution, fallback chain
+# Model assets: tiers, conversion, distribution, fallback chain
 
 The app performs every inference locally; the only network traffic it ever
 initiates is **downloading model weights**. Weights are distributed outside git.
+
+## Matting tiers
+
+| Tier | Model | Source | Status |
+|---|---|---|---|
+| default | MediaPipe Selfie Segmentation (~250KB, Apache-2.0) | official MediaPipe CDN — same infra as the face landmarker | **active out of the box** |
+| upgrade | MODNet int8 ONNX (~25MB, Apache-2.0) | manifest chain below | activates when the asset exists (hair-level edges) |
+
+Both implement the core `MattingModel` contract (`selfie-seg.ts` / `modnet.ts`);
+swapping tiers is a one-line change in `app.tsx`. The upgrade tier wins
+automatically for users who drop the ONNX locally once wired as a probe.
 
 ## Manifest chain (`packages/web/src/models/manifest.ts`)
 
