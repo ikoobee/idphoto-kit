@@ -67,3 +67,14 @@ describe("decontaminateEdges", () => {
     expect([...img.data]).toEqual(before)
   })
 })
+
+describe("decontaminateEdges correction bound", () => {
+  it("never moves a pixel further than the possible background contribution", () => {
+    const img = make(1, 1, () => [200, 200, 200, 255])
+    const alpha = new Uint8ClampedArray([26]) // α≈0.1 — un-mixing wants −295
+    const out = decontaminateEdges(img, alpha, [255, 255, 255])
+    const maxShift = 0.9 * 255 + 30
+    expect(out.data[0]).toBeGreaterThanOrEqual(200 - maxShift)
+    expect(out.data[0]).toBeLessThanOrEqual(200 + maxShift)
+  })
+})

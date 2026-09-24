@@ -6,10 +6,13 @@ import {
   type CropTarget,
   type FaceLandmarks,
   fitJpegToTargetKB,
+  garmentBase,
   layoutPrintSheet,
+  makeImage,
   type OutfitId,
   type OutfitShape,
   type RgbaImage,
+  restyleGarment,
   type SilhouetteMetrics,
   silhouetteMetrics,
 } from "@idphoto-kit/core"
@@ -22,7 +25,7 @@ import { downloadBytes, encodePng, imageToCanvas, makeJpegEncoder } from "./enco
 import { type Lang, makeT } from "./i18n.ts"
 import { MediaPipeFace } from "./models/face.ts"
 import { SelfieSegmenterMatte } from "./models/selfie-seg.ts"
-import { renderOutfitLayer } from "./outfit-render.ts"
+import { compositeOver, renderOutfitLayer } from "./outfit-render.ts"
 import {
   composePortrait,
   demoSource,
@@ -868,6 +871,24 @@ function MatteDownNote(props: { t: TFn; onRetry: () => void; busy: boolean }) {
   )
 }
 
+/** Grayscale torso with luma variation, as both the person and its own alpha. */
+function makeFakeTorso(): Uint8ClampedArray {
+  const d = new Uint8ClampedArray(160 * 160 * 4)
+  for (let y = 0; y < 160; y++) {
+    for (let x = 0; x < 160; x++) {
+      const i = (y * 160 + x) * 4
+      const inTorso = y > 70 && x > 20 && x < 140
+      if (!inTorso) continue
+      const v = 150 + 25 * Math.sin(x / 9) * Math.cos(y / 14) // wrinkles
+      d[i] = v
+      d[i + 1] = v
+      d[i + 2] = v
+      d[i + 3] = 255
+    }
+  }
+  return d
+}
+
 const thumbs = new Map<string, string>()
 /** 1×1 transparent PNG — "original outfit" placeholder. */
 const TRANSPARENT_PNG =
@@ -884,11 +905,23 @@ function thumbFor(id: OutfitId | null): string {
     shoulderY: 74,
     shoulderLX: 22,
     shoulderRX: 138,
-    outline: null,
     headH: 58,
+    outline: { ys: [68, 96, 124, 152], left: [24, 21, 21, 21], right: [136, 139, 139, 139] },
   }
+  // synthetic torso: restyle it like the real pipeline, then add the accents
+  const fakePerson = makeImage(160, 160, makeFakeTorso())
+  const fakeAlpha = makeImage(160, 160, makeFakeTorso())
+  const body = restyleGarment(fakePerson, fakeAlpha.data, {
+    base: garmentBase(id),
+    seamY: fake.shoulderY,
+    feather: 14,
+    outline: fake.outline,
+    bbox: fake.bbox,
+    lightFromLeft: true,
+  })
   const shapes: OutfitShape[] = buildOutfitShapes(id, fake, 160)
-  const url = imageToCanvas(renderOutfitLayer(shapes, 160, 160)).toDataURL("image/png")
+  const layer = compositeOver(body, renderOutfitLayer(shapes, 160, 160))
+  const url = imageToCanvas(layer).toDataURL("image/png")
   thumbs.set(id, url)
   return url
 }

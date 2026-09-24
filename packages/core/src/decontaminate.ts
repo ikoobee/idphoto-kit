@@ -43,6 +43,10 @@ export interface DecontaminateOptions {
 /**
  * Un-mix the background color out of the transition band. Returns a fresh
  * image; the input is never mutated. Alpha is untouched.
+ *
+ * The correction is bounded by how much background could actually be present
+ * ((1−α)·255, plus headroom): unbounded un-mixing overshoots on already-clean
+ * pixels and leaves a rim BRIGHTER than both sides — the classic halo line.
  */
 export function decontaminateEdges(
   img: RgbaImage,
@@ -57,10 +61,13 @@ export function decontaminateEdges(
     if (a <= lo || a >= hi) continue
     const p = i * 4
     const inv = 1 - a
-    // Uint8ClampedArray clamps the overshoot that strong un-mixing produces
-    out[p] = (img.data[p]! - inv * bg[0]) / a
-    out[p + 1] = (img.data[p + 1]! - inv * bg[1]) / a
-    out[p + 2] = (img.data[p + 2]! - inv * bg[2]) / a
+    const maxShift = inv * 255 + 30 // physical bound on the bg contribution
+    for (let c = 0; c < 3; c++) {
+      const raw = (img.data[p + c]! - inv * bg[c]!) / a
+      const delta = raw - img.data[p + c]!
+      const clamped = img.data[p + c]! + Math.max(-maxShift, Math.min(maxShift, delta))
+      out[p + c] = clamped
+    }
   }
   return { data: out, width: img.width, height: img.height }
 }

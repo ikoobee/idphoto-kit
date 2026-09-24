@@ -30,16 +30,24 @@ export {
   transpose,
 } from "./orient.ts"
 export type {
+  GarmentBase,
   OutfitBlend,
   OutfitId,
   OutfitShape,
   OutfitStyleOptions,
   Paint,
   PathCommand,
+  RestyleOptions,
   SilhouetteMetrics,
   SilhouetteOptions,
   SilhouetteOutline,
 } from "./outfit.ts"
-export { buildOutfitShapes, mergeOutfitLayer, silhouetteMetrics } from "./outfit.ts"
+export {
+  buildOutfitShapes,
+  garmentBase,
+  mergeOutfitLayer,
+  restyleGarment,
+  silhouetteMetrics,
+} from "./outfit.ts"
 export type { RgbaImage } from "./types.ts"
 export { blankImage, cloneImage, fromImageData, makeImage } from "./types.ts"

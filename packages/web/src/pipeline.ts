@@ -10,14 +10,16 @@ import {
   decontaminateEdges,
   estimateBackgroundColor,
   type FaceLandmarks,
+  garmentBase,
   mergeOutfitLayer,
   type OutfitId,
   type RgbaImage,
   renderToSpec,
   resizeBilinear,
+  restyleGarment,
   type SilhouetteMetrics,
 } from "@idphoto-kit/core"
-import { renderOutfitLayer } from "./outfit-render.ts"
+import { compositeOver, renderOutfitLayer } from "./outfit-render.ts"
 
 /**
  * Edit pipeline wiring: tone → outfit patch → edge decontamination →
@@ -59,12 +61,25 @@ export function composePortrait(
   if (opts.outfit && prepared.silhouette) {
     const sil = prepared.silhouette
     const seamFeather = Math.max(14, sil.headH * 0.16)
+    const fromLeft = lightFromLeft(toned, prepared.alpha, sil)
     const skin = estimateSkinTone(toned, prepared.alpha, sil)
-    const shapes = buildOutfitShapes(opts.outfit, sil, source.height, { skin })
-    const layer = renderOutfitLayer(shapes, source.width, source.height, {
-      lightFromLeft: lightFromLeft(toned, prepared.alpha, sil),
+    // v4: restyle the person's own clothing (wrinkles/lighting preserved),
+    // then lay the vector accents (collar/lapels/tie/hood) on top
+    const body = restyleGarment(toned, prepared.alpha, {
+      base: garmentBase(opts.outfit),
+      seamY: sil.shoulderY,
+      feather: seamFeather,
+      outline: sil.outline,
+      bbox: sil.bbox,
+      lightFromLeft: fromLeft,
     })
-    matchBrightness(layer, faceLuma(toned, prepared.alpha, sil))
+    const accents = renderOutfitLayer(
+      buildOutfitShapes(opts.outfit, sil, source.height, { skin }),
+      source.width,
+      source.height,
+      { lightFromLeft: fromLeft },
+    )
+    const layer = compositeOver(body, accents)
     const merged = mergeOutfitLayer(toned, alpha, layer, sil.shoulderY, seamFeather)
     portrait = merged.portrait
     alpha = merged.alpha
@@ -98,12 +113,6 @@ function estimateSkinTone(
   return n > 0 ? [r / n, g / n, b / n] : [229, 181, 140]
 }
 
-/** Mean luminance of the face region — drives garment brightness matching. */
-function faceLuma(img: RgbaImage, alpha: AlphaMat, sil: SilhouetteMetrics): number {
-  const [r, g, b] = estimateSkinTone(img, alpha, sil)
-  return 0.299 * r + 0.587 * g + 0.114 * b
-}
-
 /** Which side of the head is brighter — garment gradients follow the light. */
 function lightFromLeft(img: RgbaImage, alpha: AlphaMat, sil: SilhouetteMetrics): boolean {
   const y1 = Math.min(sil.chinY ?? sil.bbox.y0 + sil.headH, img.height)
@@ -131,19 +140,6 @@ function lightFromLeft(img: RgbaImage, alpha: AlphaMat, sil: SilhouetteMetrics):
   }
   if (ln_ === 0 || rn === 0) return true
   return lLuma / ln_ >= rLuma / rn
-}
-
-/** Scale garment RGB toward the photo's exposure (default garment luma 190). */
-function matchBrightness(layer: RgbaImage, luma: number): void {
-  const k = Math.min(1.12, Math.max(0.85, luma / 190))
-  if (Math.abs(k - 1) < 0.02) return
-  const d = layer.data
-  for (let p = 0; p < d.length; p += 4) {
-    if ((d[p + 3] ?? 255) === 0) continue
-    d[p] *= k
-    d[p + 1] *= k
-    d[p + 2] *= k
-  }
 }
 
 /** Scale the cutout onto the spec canvas (face-anchored, or center fallback). */

@@ -3,11 +3,12 @@ import type { RgbaImage } from "./types.ts"
 import { blankImage } from "./types.ts"
 
 /**
- * Outfit patching (v3): replace the clothing region below the shoulder line
- * with a shaded template whose BODY hugs the matte's per-row outline (arms
- * included — a straight-sided garment leaves erased-arm gaps that show the
- * background), plus fabric shading, a neck-skin blend, collar contact shadow,
- * and ambient occlusion under the chin.
+ * Outfit patching (v4): RESTYLE the person's own clothing instead of painting
+ * a vector garment over it. The original pixels below the seam keep their
+ * wrinkles, folds, and lighting (high-frequency luma detail is transferred
+ * onto the target fabric gradient), so the result moves and shades with the
+ * real body — the flat "pasted-on" look of a fully synthetic garment is gone.
+ * Vector accents (collar, lapels, tie, hood) ride on top for garment identity.
  *
  * Shape generation stays pure data (path commands + paint specs) so the
  * platform layer rasterizes it however it wants; pixel blending stays here so
@@ -49,7 +50,7 @@ export interface SilhouetteOptions {
   neckRatio?: number
   /** Row width threshold (× head width) marking the shoulder flare. Default 1.5. */
   shoulderRatio?: number
-  /** Outline sampling stride in rows. Default: ~12 samples over the torso. */
+  /** Outline sampling stride in rows. Default: ~14 samples over the torso. */
   outlineStep?: number
 }
 
@@ -197,10 +198,105 @@ export interface OutfitStyleOptions {
 
 const rgba = (c: [number, number, number], a: number) => `rgba(${c[0]},${c[1]},${c[2]},${a})`
 
+/** Fabric base colors of each template (torso top → bottom). */
+export interface GarmentBase {
+  top: [number, number, number]
+  bottom: [number, number, number]
+}
+
+export function garmentBase(id: OutfitId): GarmentBase {
+  if (id === "suit") return { top: [52, 72, 110], bottom: [34, 49, 78] }
+  if (id === "career") return { top: [66, 90, 128], bottom: [44, 62, 92] }
+  return { top: [50, 54, 66], bottom: [28, 31, 40] } // academic
+}
+
+export interface RestyleOptions {
+  base: GarmentBase
+  seamY: number
+  feather: number
+  outline: SilhouetteOutline | null
+  bbox: { x0: number; y0: number; x1: number; y1: number }
+  /** Horizontal shading agrees with the brighter side of the face. */
+  lightFromLeft: boolean
+}
+
 /**
- * Build the outfit template anchored on the silhouette: the garment body
- * follows the per-row torso outline (arms included), the collar opens around
- * the estimated neck width, and shading layers give the fabric volume.
+ * Restyle the garment region of the person: recolor everything below the seam
+ * onto the template's fabric gradient while TRANSFERRING the original luma
+ * detail (wrinkles, folds, body shading) onto it. Returns a full-canvas layer
+ * (opaque below the seam, transparent above); mergeOutfitLayer handles the
+ * seam blend and silhouette clipping.
+ */
+export function restyleGarment(person: RgbaImage, alpha: AlphaMat, o: RestyleOptions): RgbaImage {
+  const { width: w, height: h } = person
+  const luma = new Float32Array(w * h)
+  for (let i = 0; i < luma.length; i++) {
+    const p = i * 4
+    luma[i] = 0.299 * person.data[p]! + 0.587 * person.data[p + 1]! + 0.114 * person.data[p + 2]!
+  }
+  const radius = Math.max(6, Math.round((o.bbox.y1 - o.seamY) / 24))
+  const smooth = boxBlur(luma, w, h, radius)
+
+  const out = blankImage(w, h)
+  const spanY = Math.max(1, o.bbox.y1 - o.seamY)
+  let oi = 0 // outline sample cursor — rows are visited in order
+  for (let y = Math.max(0, Math.floor(o.seamY - o.feather)); y < h; y++) {
+    if (o.outline) {
+      while (oi + 1 < o.outline.ys.length && o.outline.ys[oi + 1]! <= y) oi++
+    }
+    const lx = o.outline ? o.outline.left[oi]! : o.bbox.x0
+    const rx = o.outline ? o.outline.right[oi]! : o.bbox.x1
+    const rowHalf = Math.max(1, (rx - lx) / 2)
+    const cx = (lx + rx) / 2
+    const t = clamp01((y - o.seamY) / spanY)
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x
+      if (alpha[i]! < 24) continue
+      const s = smooth[i]!
+      const detail = s > 1 ? clampRange(luma[i]! / s, 0.6, 1.55) : 1
+      const xRel = (x - cx) / rowHalf
+      const dirX = o.lightFromLeft ? xRel : -xRel
+      const shade = 1 - 0.28 * Math.abs(xRel) ** 1.6 - 0.08 * dirX
+      const p = i * 4
+      for (let c = 0; c < 3; c++) {
+        const base = o.base.top[c]! + (o.base.bottom[c]! - o.base.top[c]!) * t
+        out.data[p + c] = base * shade * detail
+      }
+      out.data[p + 3] = 255
+    }
+  }
+  return out
+}
+
+/** Separable box blur with running sums (edge-clamped), O(pixels). */
+function boxBlur(src: Float32Array, w: number, h: number, r: number): Float32Array {
+  const tmp = new Float32Array(src.length)
+  const out = new Float32Array(src.length)
+  const win = 2 * r + 1
+  for (let y = 0; y < h; y++) {
+    const row = y * w
+    let sum = 0
+    for (let k = -r; k <= r; k++) sum += src[row + Math.min(w - 1, Math.max(0, k))]!
+    for (let x = 0; x < w; x++) {
+      tmp[row + x] = sum / win
+      sum += src[row + Math.min(w - 1, x + r + 1)]! - src[row + Math.max(0, x - r)]!
+    }
+  }
+  for (let x = 0; x < w; x++) {
+    let sum = 0
+    for (let k = -r; k <= r; k++) sum += tmp[Math.min(h - 1, Math.max(0, k)) * w + x]!
+    for (let y = 0; y < h; y++) {
+      out[y * w + x] = sum / win
+      sum += tmp[Math.min(h - 1, y + r + 1) * w + x]! - tmp[Math.max(0, y - r) * w + x]!
+    }
+  }
+  return out
+}
+
+/**
+ * Accent shapes that give the restyled garment its identity: collar opening,
+ * lapels, tie / placket / hood, plus the finishing shadows. The fabric body
+ * itself comes from restyleGarment — no painted body polygon anymore.
  */
 export function buildOutfitShapes(
   id: OutfitId,
@@ -211,12 +307,11 @@ export function buildOutfitShapes(
   const skin = opts.skin ?? [229, 181, 140]
   const cx = (m.bbox.x0 + m.bbox.x1) / 2
   const nx = m.headW * 0.32 // half collar opening — breathes around the neck
-  const rise = m.headH * 0.13 // shoulders rise toward the neck
+  const shW = Math.max(m.shoulderRX - m.shoulderLX, m.headW * 1.6)
   const topY = m.shoulderY - m.headH * 0.1
+  const collarY = topY + m.headH * 0.08
   const botY = Math.min(height, m.bbox.y1 + 60)
   const neckY = topY + m.headH * 0.06
-
-  const { bodyPath, bodyTopY } = bodyWrap(m, cx, nx, rise, topY, botY)
 
   // shared finishing layers ----------------------------------------------
   const neckBlend: OutfitShape = {
@@ -239,15 +334,15 @@ export function buildOutfitShapes(
     paint: {
       kind: "radial",
       cx,
-      cy: bodyTopY + nx * 0.2,
+      cy: collarY + nx * 0.2,
       r: nx * 1.9,
       stops: [
         [0, "rgba(0,0,0,0.30)"],
-        [0.65, "rgba(0,0,0,0.10)"],
+        [0.65, "rgba(0,0,0,0.12)"],
         [1, "rgba(0,0,0,0)"],
       ],
     },
-    path: [e(cx, bodyTopY + nx * 0.2, nx * 1.9, nx * 0.8), close()],
+    path: [e(cx, collarY + nx * 0.2, nx * 1.9, nx * 0.8), close()],
   }
   const chinShadow: OutfitShape = {
     // ambient occlusion under the chin onto the garment
@@ -264,36 +359,25 @@ export function buildOutfitShapes(
     },
     path: [e(cx, neckY + m.headH * 0.05, nx * 2.6, nx * 1.6), close()],
   }
-  const sheen = (stops: [number, string][]): OutfitShape => ({
-    // vertical light-on-top / dark-at-bottom volume overlay on the body
-    paint: { kind: "linear", dir: "v", stops },
-    path: bodyPath,
-  })
 
   if (id === "suit") {
-    const collarY = bodyTopY
-    const vDepth = Math.max(shWOf(m) * 0.5, nx * 1.6)
+    const vDepth = Math.max(shW * 0.5, nx * 1.6)
     return [
       {
-        // jacket body: cylinder shading — dark edges, lighter chest
+        // soft white halo around the shirt V — melts its edge into the jacket
         paint: {
-          kind: "linear",
-          dir: "h",
+          kind: "radial",
+          cx,
+          cy: collarY + vDepth * 0.3,
+          r: nx * 1.9,
           stops: [
-            [0, "#223049"],
-            [0.28, "#2f4368"],
-            [0.5, "#38527e"],
-            [0.72, "#2f4368"],
-            [1, "#1c293f"],
+            [0, "rgba(240,244,249,0.55)"],
+            [0.6, "rgba(240,244,249,0.28)"],
+            [1, "rgba(240,244,249,0)"],
           ],
         },
-        path: bodyPath,
+        path: [e(cx, collarY + vDepth * 0.3, nx * 1.9, vDepth * 0.9), close()],
       },
-      sheen([
-        [0, "rgba(255,255,255,0.14)"],
-        [0.45, "rgba(255,255,255,0)"],
-        [1, "rgba(0,0,0,0.24)"],
-      ]),
       {
         // shirt V: near-white with a downward dim
         paint: {
@@ -315,11 +399,28 @@ export function buildOutfitShapes(
         ],
       },
       {
-        paint: { kind: "solid", color: "#7e2a30" },
+        // tie body: gentle vertical variation so its lower half blends in
+        paint: {
+          kind: "linear",
+          dir: "v",
+          stops: [
+            [0, "#7e2a30"],
+            [0.6, "#8a3138"],
+            [1, "#6e262b"],
+          ],
+        },
         path: tiePath(cx, collarY + 1, nx, vDepth, botY, 1),
       },
       {
-        paint: { kind: "solid", color: "#a0454c" },
+        // tie highlight: fades out downward instead of ending in a flat band
+        paint: {
+          kind: "linear",
+          dir: "v",
+          stops: [
+            [0, "rgba(160,69,76,0.9)"],
+            [1, "rgba(126,42,48,0)"],
+          ],
+        },
         path: tiePath(cx - nx * 0.08, collarY + 1, nx * 0.58, vDepth, botY, 0.7),
       },
       lapel(cx - nx, collarY, m.shoulderLX, m.shoulderY, vDepth),
@@ -330,27 +431,7 @@ export function buildOutfitShapes(
     ]
   }
   if (id === "career") {
-    const collarY = bodyTopY
     return [
-      {
-        paint: {
-          kind: "linear",
-          dir: "h",
-          stops: [
-            [0, "#28374a"],
-            [0.3, "#3f5470"],
-            [0.5, "#47607f"],
-            [0.7, "#3f5470"],
-            [1, "#222e3d"],
-          ],
-        },
-        path: bodyPath,
-      },
-      sheen([
-        [0, "rgba(255,255,255,0.14)"],
-        [0.45, "rgba(255,255,255,0)"],
-        [1, "rgba(0,0,0,0.26)"],
-      ]),
       {
         // white inner panel, wide V
         paint: {
@@ -363,7 +444,7 @@ export function buildOutfitShapes(
         },
         path: [
           mv(cx - nx * 1.25, collarY + 2),
-          q(cx, collarY + shWOf(m) * 0.34, cx + nx * 1.25, collarY + 2),
+          q(cx, collarY + shW * 0.34, cx + nx * 1.25, collarY + 2),
           ln(cx + nx * 1.25, botY),
           ln(cx - nx * 1.25, botY),
           close(),
@@ -374,9 +455,9 @@ export function buildOutfitShapes(
         paint: { kind: "solid", color: "#55677e" },
         path: [
           mv(cx - nx * 1.25, collarY + 2),
-          q(cx, collarY + shWOf(m) * 0.16, cx + nx * 1.25, collarY + 2),
+          q(cx, collarY + shW * 0.16, cx + nx * 1.25, collarY + 2),
           ln(cx + nx * 1.25, collarY + 10),
-          q(cx, collarY + shWOf(m) * 0.16 + 10, cx - nx * 1.25, collarY + 10),
+          q(cx, collarY + shW * 0.16 + 10, cx - nx * 1.25, collarY + 10),
           close(),
         ],
       },
@@ -386,23 +467,8 @@ export function buildOutfitShapes(
     ]
   }
   // academic
-  const collarY = bodyTopY
+  const rise = m.headH * 0.13
   return [
-    {
-      // gown: near-black with a horizontal sheen
-      paint: {
-        kind: "linear",
-        dir: "h",
-        stops: [
-          [0, "#1a1d24"],
-          [0.35, "#2c303c"],
-          [0.5, "#333848"],
-          [0.65, "#2c303c"],
-          [1, "#15181e"],
-        ],
-      },
-      path: gownPath(m, cx, nx, rise, topY, botY),
-    },
     {
       paint: {
         kind: "linear",
@@ -431,125 +497,20 @@ export function buildOutfitShapes(
           [1, "#6b2125"],
         ],
       },
-      path: hoodPath(m, cx, nx, rise, topY),
+      path: [
+        mv(cx - shW * 0.46, m.shoulderY + shW * 0.08),
+        q(cx - shW * 0.42, topY, cx - shW * 0.26, topY - rise * 0.3),
+        q(cx, topY - rise * 0.5, cx + shW * 0.12, collarY),
+        ln(cx + shW * 0.36, collarY + shW * 0.14),
+        q(cx + shW * 0.32, collarY + shW * 0.42, cx + shW * 0.22, collarY + shW * 0.58),
+        ln(cx + shW * 0.08, collarY + shW * 0.6),
+        q(cx + shW * 0.1, collarY + shW * 0.3, cx - shW * 0.3, collarY + shW * 0.2),
+        close(),
+      ],
     },
     neckBlend,
     collarShadow,
     chinShadow,
-  ]
-}
-
-function shWOf(m: SilhouetteMetrics): number {
-  return Math.max(m.shoulderRX - m.shoulderLX, m.headW * 1.6)
-}
-
-/**
- * Torso-hugging garment body: walk the sampled outline down the left side,
- * across the bottom, and up the right side, then close over the shoulders and
- * collar notch. A straight-sided fallback covers degenerate (outline-less)
- * mattes.
- */
-function bodyWrap(
-  m: SilhouetteMetrics,
-  cx: number,
-  nx: number,
-  rise: number,
-  topY: number,
-  botY: number,
-): { bodyPath: PathCommand[]; bodyTopY: number } {
-  const o = m.outline
-  if (!o) {
-    const shL = Math.min(m.shoulderLX, cx - m.headW * 0.8)
-    const shR = Math.max(m.shoulderRX, cx + m.headW * 0.8)
-    const collarY = topY + shWOf(m) * 0.14
-    return {
-      bodyTopY: collarY,
-      bodyPath: [
-        mv(shL, m.shoulderY + shWOf(m) * 0.06),
-        q(shL + shWOf(m) * 0.02, topY, cx - nx * 1.9, collarY - rise * 0.3),
-        ln(cx - nx, collarY),
-        ln(cx + nx, collarY),
-        q(cx + nx * 1.9, collarY - rise * 0.3, shR - shWOf(m) * 0.02, topY),
-        ln(shR, m.shoulderY + shWOf(m) * 0.06),
-        ln(shR, botY),
-        ln(shL, botY),
-        close(),
-      ],
-    }
-  }
-  const collarY = topY + m.headH * 0.08
-  const path: PathCommand[] = []
-  // left shoulder → down the left outline
-  path.push(mv(o.left[0]!, o.ys[0]!))
-  for (let i = 1; i < o.ys.length; i++) path.push(ln(o.left[i]!, Math.min(o.ys[i]!, botY)))
-  path.push(ln(o.left[o.left.length - 1]!, botY))
-  // across the bottom, up the right outline
-  path.push(ln(o.right[o.right.length - 1]!, botY))
-  for (let i = o.ys.length - 1; i >= 0; i--) path.push(ln(o.right[i]!, Math.min(o.ys[i]!, botY)))
-  // over the right shoulder into the collar notch, across, back out left
-  path.push(q(cx + nx * 2.0, collarY - rise * 0.35, cx + nx, collarY))
-  path.push(ln(cx - nx, collarY))
-  path.push(q(cx - nx * 1.7, collarY - rise * 0.3, o.left[0]!, o.ys[0]!))
-  path.push(close())
-  return { bodyPath: path, bodyTopY: collarY }
-}
-
-/** Academic gown flares wider than the body outline. */
-function gownPath(
-  m: SilhouetteMetrics,
-  cx: number,
-  nx: number,
-  rise: number,
-  topY: number,
-  height: number,
-): PathCommand[] {
-  const o = m.outline
-  const flare = (m.bbox.x1 - m.bbox.x0) * 0.08
-  const grow = (x: number, edge: 0 | 1) => (edge === 0 ? x - flare : x + flare)
-  if (!o) {
-    const aw = shWOf(m) * 1.16
-    const bot = m.bbox.y1
-    return [
-      mv(cx - aw / 2, m.shoulderY + shWOf(m) * 0.12),
-      q(cx - aw * 0.52, topY, cx - aw * 0.3, topY - rise * 0.2),
-      q(cx, topY - rise * 0.55, cx + aw * 0.3, topY - rise * 0.2),
-      q(cx + aw * 0.52, topY, cx + aw / 2, m.shoulderY + shWOf(m) * 0.12),
-      ln(cx + aw / 2, bot),
-      ln(cx - aw / 2, bot),
-      close(),
-    ]
-  }
-  const botY = Math.min(o.ys[o.ys.length - 1]! + 40, height)
-  const path: PathCommand[] = [mv(grow(o.left[0]!, 0), o.ys[0]!)]
-  for (let i = 1; i < o.ys.length; i++) path.push(ln(grow(o.left[i]!, 0), o.ys[i]!))
-  path.push(ln(grow(o.left[o.left.length - 1]!, 0), botY))
-  path.push(ln(grow(o.right[o.right.length - 1]!, 1), botY))
-  for (let i = o.ys.length - 1; i >= 0; i--) path.push(ln(grow(o.right[i]!, 1), o.ys[i]!))
-  path.push(q(cx + nx * 2.2, o.ys[0]! - rise, cx + nx, o.ys[0]! + 4))
-  path.push(ln(cx - nx, o.ys[0]! + 4))
-  path.push(q(cx - nx * 1.9, o.ys[0]! - rise, grow(o.left[0]!, 0), o.ys[0]!))
-  path.push(close())
-  return path
-}
-
-function hoodPath(
-  m: SilhouetteMetrics,
-  cx: number,
-  nx: number,
-  rise: number,
-  topY: number,
-): PathCommand[] {
-  const aw = shWOf(m) * 1.16
-  const collarY = topY + m.headH * 0.08
-  return [
-    mv(cx - aw * 0.46, m.shoulderY + shWOf(m) * 0.08),
-    q(cx - aw * 0.42, topY, cx - aw * 0.26, topY - rise * 0.3),
-    q(cx, topY - rise * 0.5, cx + aw * 0.12, collarY),
-    ln(cx + aw * 0.36, collarY + shWOf(m) * 0.14),
-    q(cx + aw * 0.32, collarY + shWOf(m) * 0.42, cx + aw * 0.22, collarY + shWOf(m) * 0.58),
-    ln(cx + aw * 0.08, collarY + shWOf(m) * 0.6),
-    q(cx + aw * 0.1, collarY + shWOf(m) * 0.3, cx - aw * 0.3, collarY + shWOf(m) * 0.2),
-    close(),
   ]
 }
 
@@ -631,8 +592,8 @@ export interface OutfitBlend {
 }
 
 /**
- * Merge a rasterized outfit layer under the person: the original clothing is
- * erased below the seam (feathered), the outfit patch is clipped to the
+ * Merge the outfit layer under the person: the original clothing region is
+ * replaced below the seam (feathered), the outfit patch is clipped to the
  * silhouette below the seam, and the person's head/shoulders are composited
  * over the patch so the neck line stays natural.
  */
@@ -674,4 +635,8 @@ export function mergeOutfitLayer(
 
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v
+}
+
+function clampRange(v: number, lo: number, hi: number): number {
+  return v < lo ? lo : v > hi ? hi : v
 }

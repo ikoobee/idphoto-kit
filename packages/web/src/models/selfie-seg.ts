@@ -56,12 +56,13 @@ export class SelfieSegmenterMatte implements MattingModel {
       const mask = result.confidenceMasks?.[0]
       if (!mask) throw new Error("selfie segmenter returned no confidence mask")
       const alpha = upscaleMaskToAlpha(mask, input.width, input.height)
-      // slightly tighter cut than the default band — decontamination (pipeline)
-      // handles the residual fringe, so a crisper cut keeps edges clean
+      // wide transition band + real feather: a hard 1px cut reads as a pasted
+      // line against flat backgrounds; decontamination cleans the residual
+      // fringe that a wider band lets through
       return refineAlpha(alpha, input.width, input.height, {
-        lowCut: 0.42,
-        highCut: 0.62,
-        feather: 1,
+        lowCut: 0.3,
+        highCut: 0.7,
+        feather: 2,
       })
     } finally {
       result.close()

@@ -93,8 +93,8 @@ const STRINGS: Record<string, Entry> = {
   outfitCareer: { zh: "职业装", en: "Career" },
   outfitAcademic: { zh: "学位服", en: "Academic" },
   outfitNote: {
-    zh: "换装为贴片替换：以人像轮廓锚定肩线，替换服装区域。",
-    en: "Outfit patching: anchored at the shoulder line of the silhouette.",
+    zh: "换装为智能重着色：保留您照片中的衣纹与光影，仅更换面料配色并叠加领型配饰。",
+    en: "Outfit restyle: keeps your photo's fabric folds and lighting, swapping color and collar accents.",
   },
   dx: { zh: "左右", en: "Pan X" },
   dy: { zh: "上下", en: "Pan Y" },

@@ -1,8 +1,10 @@
 import { describe, expect, it } from "vitest"
 import {
   buildOutfitShapes,
+  type GarmentBase,
   mergeOutfitLayer,
   type OutfitId,
+  restyleGarment,
   silhouetteMetrics,
 } from "../src/outfit.ts"
 import { makeImage } from "../src/types.ts"
@@ -73,18 +75,15 @@ describe("buildOutfitShapes", () => {
     }
   })
 
-  it("anchors the garment on the real shoulder extents, not the canvas", () => {
+  it("suit accents include a gradient tie pair anchored in the collar", () => {
     const shapes = buildOutfitShapes("suit", m, 200)
-    const body = shapes[0]!
-    const xs = body.path.flatMap((c) =>
-      c.op === "M" || c.op === "L" ? [c.x] : c.op === "Q" ? [c.x] : [],
-    )
-    const minX = Math.min(...xs)
-    const maxX = Math.max(...xs)
-    expect(maxX - minX).toBeGreaterThan(m.headW) // shoulder-wide
-    expect(maxX - minX).toBeLessThan(100) // not canvas-wide
-    // centered on the silhouette
-    expect((minX + maxX) / 2).toBeCloseTo((m.bbox.x0 + m.bbox.x1) / 2, 0)
+    const ties = shapes.filter((s) => s.paint.kind === "linear" && s.path[0]?.op === "M")
+    expect(ties.length).toBeGreaterThanOrEqual(2) // tie body + fading highlight
+    for (const s of ties) {
+      const xs = s.path.flatMap((c) => (c.op === "M" || c.op === "L" ? [c.x] : []))
+      expect(Math.min(...xs)).toBeGreaterThan(20) // inside the torso
+      expect(Math.max(...xs)).toBeLessThan(80)
+    }
   })
 
   it("includes the neck-blend and chin-shadow finishing layers", () => {
@@ -152,5 +151,65 @@ describe("mergeOutfitLayer", () => {
     const alpha = new Uint8ClampedArray(w * h)
     const wrong = makeImage(w + 1, h, new Uint8ClampedArray((w + 1) * h * 4))
     expect(() => mergeOutfitLayer(person, alpha, wrong, seamY, feather)).toThrow(/dimensions/)
+  })
+})
+
+describe("restyleGarment", () => {
+  const w = 20
+  const h = 20
+  const seamY = 8
+
+  function flat(luma: number, alpha255 = true) {
+    const data = new Uint8ClampedArray(w * h * 4)
+    for (let p = 0; p < data.length; p += 4) {
+      data[p] = luma
+      data[p + 1] = luma
+      data[p + 2] = luma
+      data[p + 3] = alpha255 ? 255 : 0
+    }
+    return makeImage(w, h, data)
+  }
+
+  const opts = {
+    base: { top: [100, 100, 100], bottom: [50, 50, 50] } as GarmentBase,
+    seamY,
+    feather: 2,
+    outline: null,
+    bbox: { x0: 0, y0: 0, x1: w - 1, y1: h - 1 },
+    lightFromLeft: true,
+  }
+
+  it("leaves the region above the seam transparent", () => {
+    const out = restyleGarment(flat(120), new Uint8ClampedArray(w * h).fill(255), opts)
+    const p = 4 * 4 // (4,4) above seam
+    expect(out.data[p + 3]).toBe(0)
+  })
+
+  it("colors below-seam pixels with the base gradient, darker toward the bottom", () => {
+    const out = restyleGarment(flat(120), new Uint8ClampedArray(w * h).fill(255), opts)
+    const center = (y: number) => (y * w + 10) * 4
+    const topV = out.data[center(10)]!
+    const botV = out.data[center(18)]!
+    expect(topV).toBeGreaterThan(0)
+    expect(topV).toBeGreaterThan(botV)
+  })
+
+  it("transfers original luma detail: brighter input wrinkles → brighter output", () => {
+    const person = flat(120)
+    // a bright stripe at x=6 below the seam
+    for (let y = seamY; y < h; y++) {
+      const p = (y * w + 6) * 4
+      person.data[p] = 200
+      person.data[p + 1] = 200
+      person.data[p + 2] = 200
+    }
+    const out = restyleGarment(person, new Uint8ClampedArray(w * h).fill(255), opts)
+    const y = 14
+    expect(out.data[(y * w + 6) * 4]!).toBeGreaterThan(out.data[(y * w + 7) * 4]!)
+  })
+
+  it("skips pixels outside the silhouette", () => {
+    const out = restyleGarment(flat(120), new Uint8ClampedArray(w * h), opts) // alpha 0
+    expect(out.data[(14 * w + 5) * 4 + 3]).toBe(0)
   })
 })
