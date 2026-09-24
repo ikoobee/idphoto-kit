@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { refineAlpha } from "../src/matte.ts"
+import { erodeAlpha, refineAlpha } from "../src/matte.ts"
 
 describe("refineAlpha", () => {
   it("keeps binary masks untouched (no feather)", () => {
@@ -52,5 +52,23 @@ describe("refineAlpha", () => {
       feather: 0,
     })
     expect(wide[0]!).toBeGreaterThan(narrow[0]!)
+  })
+})
+
+describe("erodeAlpha", () => {
+  it("shrinks a solid block by the radius", () => {
+    const w = 7
+    const h = 7
+    const a = new Uint8ClampedArray(w * h)
+    for (let y = 2; y <= 4; y++) for (let x = 2; x <= 4; x++) a[y * w + x] = 255
+    const out = erodeAlpha(a, w, h, 1)
+    expect(out[3 * w + 3]).toBe(255) // center survives
+    expect(out[2 * w + 2]).toBe(0) // corner of the block eroded away
+    expect(out[3 * w + 4]).toBe(0) // block edge eroded (neighbor is background)
+  })
+
+  it("returns the input unchanged at radius 0", () => {
+    const a = new Uint8ClampedArray(4).fill(200)
+    expect(erodeAlpha(a, 2, 2, 0)).toBe(a)
   })
 })

@@ -53,11 +53,17 @@ export class MediaPipeFace {
     const right = px(33)
     const left = px(263)
     const eyesCenter = { x: (right.x + left.x) / 2, y: (right.y + left.y) / 2 }
+    // landmark 10 is the FOREHEAD top (hairline), not the skull crown the core
+    // contract expects — without extension the head height is underestimated,
+    // the crop overscales, and the crown lands above the canvas edge.
+    const foreheadTop = px(10)
+    const chin = px(152)
+    const extend = (chin.y - foreheadTop.y) * 0.3
     return {
       eyesCenter,
       eyeLineAngle: Math.atan2(left.y - right.y, left.x - right.x),
-      headTop: px(10),
-      chin: px(152),
+      headTop: { x: foreheadTop.x, y: foreheadTop.y - extend },
+      chin,
     }
   }
 }

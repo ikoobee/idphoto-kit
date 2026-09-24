@@ -85,7 +85,7 @@ export function composePortrait(
     alpha = merged.alpha
   }
 
-  if (oldBg) portrait = decontaminateEdges(portrait, alpha, oldBg)
+  if (oldBg) portrait = decontaminateEdges(portrait, alpha, oldBg, { band: [0.02, 0.98] })
   return composeBackground(portrait, alpha, opts.bg)
 }
 

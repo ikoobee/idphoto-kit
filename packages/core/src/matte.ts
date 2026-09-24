@@ -62,6 +62,43 @@ function smoothstep(lo: number, hi: number, v: number): number {
   return Math.round(t * t * (3 - 2 * t) * 255)
 }
 
+/**
+ * Min-filter erosion of the matte: shrinks the foreground by `radius` pixels.
+ * Upscaled low-res masks leave a contaminated rim — subject pixels right at
+ * the edge carry the OLD background's color spill (shoulders against a blue
+ * wall stay blue-tinted no matter how good the transition un-mixing is).
+ * Eroding one pixel moves the composite boundary inside clean subject pixels;
+ * the feather band then re-blends the edge against the NEW background.
+ */
+export function erodeAlpha(alpha: AlphaMat, width: number, height: number, radius = 1): AlphaMat {
+  if (radius <= 0) return alpha
+  const out = new Uint8ClampedArray(alpha.length)
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let min = 255
+      for (let dy = -radius; dy <= radius; dy++) {
+        const yy = y + dy
+        if (yy < 0 || yy >= height) {
+          min = 0 // outside the canvas = background
+          break
+        }
+        const row = yy * width
+        for (let dx = -radius; dx <= radius; dx++) {
+          const xx = x + dx
+          const v = xx < 0 || xx >= width ? 0 : alpha[row + xx]!
+          if (v < min) {
+            min = v
+            if (min === 0) break
+          }
+        }
+        if (min === 0) break
+      }
+      out[y * width + x] = min
+    }
+  }
+  return out
+}
+
 /** Small box blur applied only on the transition band (0<a<255). */
 function featherEdges(a: AlphaMat, w: number, h: number, r: number): AlphaMat {
   const out = new Uint8ClampedArray(a.length)

@@ -4,6 +4,7 @@ import {
   buildOutfitShapes,
   type CropAdjust,
   type CropTarget,
+  erodeAlpha,
   type FaceLandmarks,
   fitJpegToTargetKB,
   garmentBase,
@@ -133,7 +134,14 @@ export function App() {
       matteError = e instanceof Error ? e.message : String(e)
       console.warn("matting unavailable — background swap disabled", e)
     }
+    // erode the matte 1px: upscaled masks carry an old-background spill rim
+    // (blue-tinted shoulders) that transition-band un-mixing cannot remove
+    if (alpha) alpha = erodeAlpha(alpha, source.width, source.height, 1)
     const silhouette = alpha ? silhouetteMetrics(alpha, source.width, source.height) : null
+    // clamp the head top to the matte's true crown (hair) when available
+    if (face && silhouette && silhouette.bbox.y0 < face.headTop.y) {
+      face = { ...face, headTop: { x: face.eyesCenter.x, y: silhouette.bbox.y0 } }
+    }
     setSteps(
       (s) =>
         s?.map((x) => (x.id === "matte" ? { ...x, state: alpha ? "done" : "skipped" } : x)) ?? null,
@@ -180,10 +188,13 @@ export function App() {
     setBusy(true)
     matteModel.reset()
     try {
-      const alpha = await matteModel.matte(session.source)
+      let alpha = await matteModel.matte(session.source)
+      if (alpha) alpha = erodeAlpha(alpha, session.source.width, session.source.height, 1)
       patchSession({
         alpha,
-        silhouette: silhouetteMetrics(alpha, session.source.width, session.source.height),
+        silhouette: alpha
+          ? silhouetteMetrics(alpha, session.source.width, session.source.height)
+          : null,
         matteError: null,
       })
     } catch (e) {

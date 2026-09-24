@@ -59,10 +59,14 @@ export class SelfieSegmenterMatte implements MattingModel {
       // wide transition band + real feather: a hard 1px cut reads as a pasted
       // line against flat backgrounds; decontamination cleans the residual
       // fringe that a wider band lets through
+      // feather scaled to the upscaled mask's cell size (~source/256 px):
+      // a fixed 2px blur can't smooth the staircase a 256-grid leaves on a
+      // 1600px source, which reads as blocky color bands along the edges
+      const cell = Math.max(input.width, input.height) / 256
       return refineAlpha(alpha, input.width, input.height, {
         lowCut: 0.3,
         highCut: 0.7,
-        feather: 2,
+        feather: Math.max(2, Math.round(cell * 0.8)),
       })
     } finally {
       result.close()
