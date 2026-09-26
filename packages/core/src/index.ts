@@ -30,6 +30,7 @@ export {
   transpose,
 } from "./orient.ts"
 export type {
+  DetailMapOptions,
   GarmentBase,
   OutfitBlend,
   OutfitId,
@@ -43,9 +44,12 @@ export type {
   SilhouetteOutline,
 } from "./outfit.ts"
 export {
+  applyDetailMap,
   buildOutfitShapes,
+  computeDetailMap,
   garmentBase,
   mergeOutfitLayer,
+  overlayAccents,
   restyleGarment,
   silhouetteMetrics,
 } from "./outfit.ts"

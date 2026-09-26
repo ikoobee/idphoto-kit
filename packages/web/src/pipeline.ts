@@ -19,7 +19,7 @@ import {
   restyleGarment,
   type SilhouetteMetrics,
 } from "@idphoto-kit/core"
-import { compositeOver, renderOutfitLayer } from "./outfit-render.ts"
+import { renderOutfitLayer } from "./outfit-render.ts"
 
 /**
  * Edit pipeline wiring: tone → outfit patch → edge decontamination →
@@ -60,11 +60,16 @@ export function composePortrait(
   let alpha = prepared.alpha
   if (opts.outfit && prepared.silhouette) {
     const sil = prepared.silhouette
-    const seamFeather = Math.max(14, sil.headH * 0.16)
+    // tight seam: a wide feather cross-fades neck skin INTO the collar over
+    // ~80px, which reads as a smeared skin residue on the white shirt
+    const seamFeather = Math.max(10, sil.headH * 0.08)
     const fromLeft = lightFromLeft(toned, prepared.alpha, sil)
     const skin = estimateSkinTone(toned, prepared.alpha, sil)
-    // v4: restyle the person's own clothing (wrinkles/lighting preserved),
-    // then lay the vector accents (collar/lapels/tie/hood) on top
+    const detail = computeDetailMap(toned, sil.shoulderY, sil.bbox)
+    // v4.1: restyle the person's own clothing (wrinkles/lighting preserved),
+    // merge it under the head with a tight seam, THEN overlay the accents —
+    // a real collar overlaps the neck base with a crisp edge, and accents
+    // inherit 60% of the photo's fabric detail so they match the cloth
     const body = restyleGarment(toned, prepared.alpha, {
       base: garmentBase(opts.outfit),
       seamY: sil.shoulderY,
@@ -73,15 +78,15 @@ export function composePortrait(
       bbox: sil.bbox,
       lightFromLeft: fromLeft,
     })
+    const merged = mergeOutfitLayer(toned, alpha, body, sil.shoulderY, seamFeather)
     const accents = renderOutfitLayer(
       buildOutfitShapes(opts.outfit, sil, source.height, { skin }),
       source.width,
       source.height,
       { lightFromLeft: fromLeft },
     )
-    const layer = compositeOver(body, accents)
-    const merged = mergeOutfitLayer(toned, alpha, layer, sil.shoulderY, seamFeather)
-    portrait = merged.portrait
+    applyDetailMap(accents, detail, 0.6)
+    portrait = overlayAccents(merged.portrait, merged.alpha, accents)
     alpha = merged.alpha
   }
 
@@ -89,28 +94,36 @@ export function composePortrait(
   return composeBackground(portrait, alpha, opts.bg)
 }
 
-/** Average color of solidly-foreground pixels inside the head box. */
+/** Skin tone from the cheek band of the face — bright-quartile pixels only. */
 function estimateSkinTone(
   img: RgbaImage,
   alpha: AlphaMat,
   sil: SilhouetteMetrics,
 ): [number, number, number] {
-  const y1 = Math.min(sil.chinY ?? sil.bbox.y0 + sil.headH, img.height)
-  let r = 0
-  let g = 0
-  let b = 0
-  let n = 0
-  for (let y = sil.bbox.y0; y < y1; y += 2) {
+  const headH = Math.max(1, sil.headH)
+  const yStart = sil.bbox.y0 + headH * 0.35
+  const yEnd = Math.min(sil.chinY ?? sil.bbox.y0 + headH, sil.bbox.y0 + headH * 0.8)
+  const samples: { luma: number; rgb: [number, number, number] }[] = []
+  for (let y = Math.floor(yStart); y < yEnd; y += 2) {
     for (let x = sil.bbox.x0; x <= sil.bbox.x1; x += 2) {
       const i = y * img.width + x
-      if ((alpha[i] ?? 255) < 200) continue
-      r += img.data[i * 4] ?? 0
-      g += img.data[i * 4 + 1] ?? 0
-      b += img.data[i * 4 + 2] ?? 0
-      n++
+      if ((alpha[i] ?? 255) < 220) continue
+      const r = img.data[i * 4] ?? 0
+      const g = img.data[i * 4 + 1] ?? 0
+      const b = img.data[i * 4 + 2] ?? 0
+      samples.push({ luma: 0.299 * r + 0.587 * g + 0.114 * b, rgb: [r, g, b] })
     }
   }
-  return n > 0 ? [r / n, g / n, b / n] : [229, 181, 140]
+  if (!samples.length) return [229, 181, 140]
+  samples.sort((a, b) => a.luma - b.luma)
+  const top = samples.slice(Math.floor(samples.length * 0.4)) // brightest 60%: skips hair/eye shadows
+  const n = top.length
+  const sum = top.reduce(
+    (acc, s) =>
+      [acc[0] + s.rgb[0], acc[1] + s.rgb[1], acc[2] + s.rgb[2]] as [number, number, number],
+    [0, 0, 0],
+  )
+  return [sum[0] / n, sum[1] / n, sum[2] / n]
 }
 
 /** Which side of the head is brighter — garment gradients follow the light. */

@@ -228,19 +228,11 @@ export interface RestyleOptions {
  * seam blend and silhouette clipping.
  */
 export function restyleGarment(person: RgbaImage, alpha: AlphaMat, o: RestyleOptions): RgbaImage {
-  const { width: w, height: h } = person
-  const luma = new Float32Array(w * h)
-  for (let i = 0; i < luma.length; i++) {
-    const p = i * 4
-    luma[i] = 0.299 * person.data[p]! + 0.587 * person.data[p + 1]! + 0.114 * person.data[p + 2]!
-  }
-  const radius = Math.max(6, Math.round((o.bbox.y1 - o.seamY) / 24))
-  const smooth = boxBlur(luma, w, h, radius)
-
-  const out = blankImage(w, h)
+  const detail = computeDetailMap(person, o.seamY, o.bbox)
+  const out = blankImage(person.width, person.height)
   const spanY = Math.max(1, o.bbox.y1 - o.seamY)
   let oi = 0 // outline sample cursor — rows are visited in order
-  for (let y = Math.max(0, Math.floor(o.seamY - o.feather)); y < h; y++) {
+  for (let y = Math.max(0, Math.floor(o.seamY - o.feather)); y < person.height; y++) {
     if (o.outline) {
       while (oi + 1 < o.outline.ys.length && o.outline.ys[oi + 1]! <= y) oi++
     }
@@ -249,21 +241,103 @@ export function restyleGarment(person: RgbaImage, alpha: AlphaMat, o: RestyleOpt
     const rowHalf = Math.max(1, (rx - lx) / 2)
     const cx = (lx + rx) / 2
     const t = clamp01((y - o.seamY) / spanY)
-    for (let x = 0; x < w; x++) {
-      const i = y * w + x
+    for (let x = 0; x < person.width; x++) {
+      const i = y * person.width + x
       if (alpha[i]! < 24) continue
-      const s = smooth[i]!
-      const detail = s > 1 ? clampRange(luma[i]! / s, 0.6, 1.55) : 1
       const xRel = (x - cx) / rowHalf
       const dirX = o.lightFromLeft ? xRel : -xRel
       const shade = 1 - 0.28 * Math.abs(xRel) ** 1.6 - 0.08 * dirX
       const p = i * 4
       for (let c = 0; c < 3; c++) {
         const base = o.base.top[c]! + (o.base.bottom[c]! - o.base.top[c]!) * t
-        out.data[p + c] = base * shade * detail
+        out.data[p + c] = base * shade * detail[i]!
       }
       out.data[p + 3] = 255
     }
+  }
+  return out
+}
+
+export interface DetailMapOptions {
+  /** Divisor of the torso span for the low-pass radius. Smaller = more mid-scale folds kept as detail. Default 48. */
+  radiusDivisor?: number
+  /** Detail ratio clamp. Default [0.5, 1.7]. */
+  range?: [number, number]
+}
+
+/**
+ * High-frequency luma ratio map of the garment region (luma / blurred luma,
+ * contrast-boosted ×1.25): the person's real wrinkles and folds, extracted
+ * once so both the restyled fabric AND the vector accents can inherit it.
+ */
+export function computeDetailMap(
+  person: RgbaImage,
+  seamY: number,
+  bbox: { x0: number; y0: number; x1: number; y1: number },
+  opts: DetailMapOptions = {},
+): Float32Array {
+  const { width: w, height: h } = person
+  const divisor = opts.radiusDivisor ?? 48
+  const [lo, hi] = opts.range ?? [0.5, 1.7]
+  const luma = new Float32Array(w * h)
+  for (let i = 0; i < luma.length; i++) {
+    const p = i * 4
+    luma[i] = 0.299 * person.data[p]! + 0.587 * person.data[p + 1]! + 0.114 * person.data[p + 2]!
+  }
+  const radius = Math.max(6, Math.round((bbox.y1 - seamY) / divisor))
+  const smooth = boxBlur(luma, w, h, radius)
+
+  const detail = new Float32Array(w * h).fill(1)
+  for (let i = 0; i < detail.length; i++) {
+    const s = smooth[i]!
+    if (s <= 1) continue
+    const ratio = clampRange(luma[i]! / s, lo, hi)
+    detail[i] = 1 + (ratio - 1) * 1.25 // contrast boost — dark fabrics swallow detail
+  }
+  return detail
+}
+
+/**
+ * Multiply a layer's RGB by the detail map (partial strength for accents so
+ * vector pieces inherit the photo's fabric grain without doubling).
+ */
+export function applyDetailMap(layer: RgbaImage, detail: Float32Array, strength = 1): void {
+  const d = layer.data
+  for (let i = 0; i < detail.length; i++) {
+    if (d[i * 4 + 3]! === 0) continue
+    const k = 1 + (detail[i]! - 1) * strength
+    const p = i * 4
+    d[p] *= k
+    d[p + 1] *= k
+    d[p + 2] *= k
+  }
+}
+
+/**
+ * Overlay accent shapes (collar / lapels / tie / shadows) on the MERGED
+ * portrait, clipped to the merged silhouette. Drawing accents after the seam
+ * merge — instead of fading them through it — gives the collar a crisp
+ * garment edge where it overlaps the neck base, like a real collar does; no
+ * 80px skin-to-fabric smear.
+ */
+export function overlayAccents(
+  base: RgbaImage,
+  baseAlpha: AlphaMat,
+  accents: RgbaImage,
+): RgbaImage {
+  const { width: w, height: h } = base
+  if (accents.width !== w || accents.height !== h) {
+    throw new Error("accent layer dimensions do not match the portrait")
+  }
+  const out = { data: new Uint8ClampedArray(base.data), width: w, height: h }
+  for (let i = 0; i < baseAlpha.length; i++) {
+    const aA = (accents.data[i * 4 + 3]! / 255) * (baseAlpha[i]! / 255)
+    if (aA <= 0) continue
+    const p = i * 4
+    for (let c = 0; c < 3; c++) {
+      out.data[p + c] = base.data[p + c]! * (1 - aA) + accents.data[p + c]! * aA
+    }
+    out.data[p + 3] = 255
   }
   return out
 }

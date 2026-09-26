@@ -1,9 +1,12 @@
 import { describe, expect, it } from "vitest"
 import {
+  applyDetailMap,
   buildOutfitShapes,
+  computeDetailMap,
   type GarmentBase,
   mergeOutfitLayer,
   type OutfitId,
+  overlayAccents,
   restyleGarment,
   silhouetteMetrics,
 } from "../src/outfit.ts"
@@ -211,5 +214,57 @@ describe("restyleGarment", () => {
   it("skips pixels outside the silhouette", () => {
     const out = restyleGarment(flat(120), new Uint8ClampedArray(w * h), opts) // alpha 0
     expect(out.data[(14 * w + 5) * 4 + 3]).toBe(0)
+  })
+})
+
+describe("detail map + accent overlay", () => {
+  const w = 16
+  const h = 16
+  const seamY = 6
+  const bbox = { x0: 0, y0: 0, x1: w - 1, y1: h - 1 }
+
+  function gray(luma: number) {
+    const data = new Uint8ClampedArray(w * h * 4)
+    for (let p = 0; p < data.length; p += 4) {
+      data[p] = luma
+      data[p + 1] = luma
+      data[p + 2] = luma
+      data[p + 3] = 255
+    }
+    return makeImage(w, h, data)
+  }
+
+  it("computeDetailMap reads bright wrinkles as >1 ratios", () => {
+    const person = gray(120)
+    for (let y = seamY; y < h; y++) {
+      const p = (y * w + 8) * 4
+      person.data[p] = 190
+      person.data[p + 1] = 190
+      person.data[p + 2] = 190
+    }
+    const d = computeDetailMap(person, seamY, bbox)
+    expect(d[10 * w + 8]).toBeGreaterThan(1.1)
+    expect(d[10 * w + 4]).toBeCloseTo(1, 1)
+  })
+
+  it("applyDetailMap scales RGB by the map without touching transparent pixels", () => {
+    const layer = gray(100)
+    layer.data[3] = 0 // first pixel transparent
+    const before = [...layer.data.slice(0, 4)]
+    const detail = new Float32Array(w * h).fill(1.2)
+    applyDetailMap(layer, detail, 1)
+    expect([...layer.data.slice(0, 4)]).toEqual(before)
+    expect(layer.data[4]).toBe(120) // 100 * 1.2
+  })
+
+  it("overlayAccents blends over the base and clips outside the silhouette", () => {
+    const base = gray(200)
+    const baseAlpha = new Uint8ClampedArray(w * h).fill(255)
+    baseAlpha[10 * w] = 0 // silhouette hole at (0,10)
+    const accents = gray(0)
+    for (let p = 0; p < accents.data.length; p += 4) accents.data[p + 3] = 128
+    const out = overlayAccents(base, baseAlpha, accents)
+    expect(out.data[(10 * w + 5) * 4]).toBe(100) // 200*(0.5) + 0*(0.5)
+    expect(out.data[(10 * w + 0) * 4]).toBe(200) // clipped by the silhouette hole
   })
 })

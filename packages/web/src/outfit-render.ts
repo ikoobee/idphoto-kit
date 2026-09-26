@@ -126,25 +126,3 @@ function addFabricGrain(data: Uint8ClampedArray): void {
 function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v
 }
-
-/** Straight-alpha "top over base" composite via the canvas (both same dims). */
-export function compositeOver(base: RgbaImage, top: RgbaImage): RgbaImage {
-  if (base.width !== top.width || base.height !== top.height) {
-    throw new Error("compositeOver dimensions do not match")
-  }
-  const c = document.createElement("canvas")
-  c.width = base.width
-  c.height = base.height
-  const ctx = c.getContext("2d", { willReadFrequently: true })
-  if (!ctx) throw new Error("2D canvas unavailable")
-  ctx.putImageData(new ImageData(new Uint8ClampedArray(base.data), base.width, base.height), 0, 0)
-  const topCanvas = document.createElement("canvas")
-  topCanvas.width = top.width
-  topCanvas.height = top.height
-  topCanvas
-    .getContext("2d")!
-    .putImageData(new ImageData(new Uint8ClampedArray(top.data), top.width, top.height), 0, 0)
-  ctx.drawImage(topCanvas, 0, 0)
-  const id = ctx.getImageData(0, 0, c.width, c.height)
-  return { data: id.data, width: c.width, height: c.height }
-}
